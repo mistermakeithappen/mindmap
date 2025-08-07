@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { CanvasWrapper } from '@/components/CanvasWrapper'
@@ -21,54 +21,7 @@ export default function CanvasPage() {
   const supabase = createClient()
   const { nodes, edges, setNodes, setEdges } = useCanvasStore()
 
-  useEffect(() => {
-    // Clear stores before loading new canvas
-    setNodes([])
-    setEdges([])
-    loadCanvas()
-    
-    // Cleanup function to clear stores on unmount
-    return () => {
-      setNodes([])
-      setEdges([])
-    }
-  }, [canvasId])
-
-  // Reload canvas data when the page becomes visible (for synapse node updates)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        // Page became visible, reload canvas data to catch any synapse node updates
-        loadCanvas()
-      }
-    }
-
-    const handleFocus = () => {
-      // Window gained focus, reload canvas data
-      loadCanvas()
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleFocus)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleFocus)
-    }
-  }, [canvasId])
-
-  // Auto-save functionality
-  useEffect(() => {
-    if (!canvas) return // Don't save if canvas hasn't loaded yet
-    
-    const saveTimer = setTimeout(() => {
-      saveCanvas()
-    }, 2000) // Save after 2 seconds of inactivity
-
-    return () => clearTimeout(saveTimer)
-  }, [nodes, edges, canvas])
-
-  const loadCanvas = async () => {
+  const loadCanvas = useCallback(async () => {
     try {
       // Load canvas details - use * to get all fields for compatibility
       const { data: canvasData, error: canvasError } = await supabase
@@ -128,118 +81,103 @@ export default function CanvasPage() {
         console.error('Error message:', error.message)
         console.error('Error stack:', error.stack)
       }
-      
-      // If it's a Supabase error, log details
-      if (error && typeof error === 'object' && 'details' in error) {
-        console.error('Supabase error details:', error)
-      }
-      
-      router.push('/dashboard')
     } finally {
       setLoading(false)
     }
-  }
+  }, [canvasId, setNodes, setEdges, supabase])
 
-  const saveCanvas = async () => {
+  const saveCanvas = useCallback(async () => {
+    if (!canvas || !nodes.length) return
+
     setSaving(true)
-    console.log('Saving canvas:', { canvasId, nodes: nodes.length, edges: edges.length })
-    
     try {
-      // Get existing nodes and edges to delete only removed ones
-      const { data: existingNodes } = await supabase.from('nodes').select('id').eq('canvas_id', canvasId)
-      const { data: existingEdges } = await supabase.from('edges').select('id').eq('canvas_id', canvasId)
-      
-      const currentNodeIds = nodes.map(n => n.id)
-      const currentEdgeIds = edges.map(e => e.id)
-      
-      // Delete nodes that no longer exist
-      const nodesToDelete = existingNodes?.filter(n => !currentNodeIds.includes(n.id)).map(n => n.id) || []
-      if (nodesToDelete.length > 0) {
-        const { error: deleteNodesError } = await supabase.from('nodes').delete().in('id', nodesToDelete)
-        if (deleteNodesError) console.error('Error deleting nodes:', deleteNodesError)
-      }
-      
-      // Delete edges that no longer exist
-      const edgesToDelete = existingEdges?.filter(e => !currentEdgeIds.includes(e.id)).map(e => e.id) || []
-      if (edgesToDelete.length > 0) {
-        const { error: deleteEdgesError } = await supabase.from('edges').delete().in('id', edgesToDelete)
-        if (deleteEdgesError) console.error('Error deleting edges:', deleteEdgesError)
-      }
-
       // Save nodes
-      if (nodes.length > 0) {
-        const nodesToSave = nodes.map(node => ({
-          id: node.id,
-          canvas_id: canvasId,
-          type: node.type,
-          position: node.position,
-          data: node.data || {},
-          style: node.style || {},
-        }))
+      const { error: nodesError } = await supabase
+        .from('nodes')
+        .upsert(
+          nodes.map(node => ({
+            id: node.id,
+            canvas_id: canvasId,
+            type: node.type,
+            position: node.position,
+            data: node.data,
+            style: node.style,
+          }))
+        )
 
-        console.log('Saving nodes:', nodesToSave)
-        const { data, error: nodesError } = await supabase
-          .from('nodes')
-          .upsert(nodesToSave, { onConflict: 'id' })
-          .select()
-
-        if (nodesError) {
-          console.error('Error saving nodes:', JSON.stringify(nodesError, null, 2))
-          console.error('Failed nodes data:', JSON.stringify(nodesToSave, null, 2))
-          
-          // Handle constraint error for synapse type
-          if (nodesError.code === '23514' && nodesError.message?.includes('nodes_type_check')) {
-            console.warn('Synapse node type not yet supported in database. Please update the database constraint.')
-            // Continue without throwing error for now
-            // TODO: Update database constraint to include 'synapse' type
-          } else {
-            throw nodesError
-          }
-        }
-      }
+      if (nodesError) throw nodesError
 
       // Save edges
-      if (edges.length > 0) {
-        const edgesToSave = edges.map(edge => ({
-          id: edge.id,
-          canvas_id: canvasId,
-          source: edge.source,
-          target: edge.target,
-          type: edge.type || 'default',
-          label: edge.label || null,
-          style: edge.style || {},
-        }))
+      const { error: edgesError } = await supabase
+        .from('edges')
+        .upsert(
+          edges.map(edge => ({
+            id: edge.id,
+            canvas_id: canvasId,
+            source: edge.source,
+            target: edge.target,
+            type: edge.type,
+            label: edge.label,
+            style: edge.style,
+          }))
+        )
 
-        console.log('Saving edges:', edgesToSave)
-        const { error: edgesError } = await supabase
-          .from('edges')
-          .upsert(edgesToSave, { onConflict: 'id' })
+      if (edgesError) throw edgesError
 
-        if (edgesError) {
-          console.error('Error saving edges:', edgesError)
-          throw edgesError
-        }
-      }
-
-      // Update canvas updated_at
-      const { error: updateError } = await supabase
-        .from('canvases')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', canvasId)
-        
-      if (updateError) {
-        console.error('Error updating canvas timestamp:', updateError)
-      }
-      
-      console.log('Canvas saved successfully')
       setLastSaved(new Date())
     } catch (error) {
       console.error('Error saving canvas:', error)
-      alert('Failed to save canvas. Check console for details.')
     } finally {
       setSaving(false)
     }
-  }
+  }, [canvas, nodes, edges, canvasId, supabase])
+
+  useEffect(() => {
+    // Clear stores before loading new canvas
+    setNodes([])
+    setEdges([])
+    loadCanvas()
+    
+    // Cleanup function to clear stores on unmount
+    return () => {
+      setNodes([])
+      setEdges([])
+    }
+  }, [loadCanvas, setNodes, setEdges])
+
+  // Reload canvas data when the page becomes visible (for synapse node updates)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Page became visible, reload canvas data to catch any synapse node updates
+        loadCanvas()
+      }
+    }
+
+    const handleFocus = () => {
+      // Window gained focus, reload canvas data
+      loadCanvas()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [loadCanvas])
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (!canvas) return // Don't save if canvas hasn't loaded yet
+    
+    const saveTimer = setTimeout(() => {
+      saveCanvas()
+    }, 2000) // Save after 2 seconds of inactivity
+
+    return () => clearTimeout(saveTimer)
+  }, [saveCanvas, canvas])
 
   const saveCanvasTitle = async () => {
     if (!editTitle.trim() || !canvas) return

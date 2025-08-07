@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Link from 'next/link'
@@ -44,18 +44,7 @@ export function CanvasHierarchySidebar() {
   const currentCanvasId = params.id as string
   const supabase = createClient()
 
-  useEffect(() => {
-    loadHierarchy()
-  }, [currentCanvasId])
-
-  // Close context menu when clicking outside
-  useEffect(() => {
-    const handleClick = () => setContextMenu(null)
-    document.addEventListener('click', handleClick)
-    return () => document.removeEventListener('click', handleClick)
-  }, [])
-
-  const loadHierarchy = async () => {
+  const loadHierarchy = useCallback(async () => {
     try {
       // Get current canvas
       const { data: currentCanvas } = await supabase
@@ -129,7 +118,18 @@ export function CanvasHierarchySidebar() {
       console.error('Error loading hierarchy:', error)
       setLoading(false)
     }
-  }
+  }, [currentCanvasId, supabase])
+
+  useEffect(() => {
+    loadHierarchy()
+  }, [loadHierarchy])
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null)
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+    }, [])
 
   const renameCanvas = async (canvasId: string) => {
     if (!editingCanvasName.trim()) return
