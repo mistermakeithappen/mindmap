@@ -132,14 +132,14 @@ export function CustomEdge({
         document.removeEventListener('mouseup', handleMouseUp)
       }
     }
-  }, [isDragging, dragOffset])
+  }, [isDragging, dragOffset, handleMouseMove, handleMouseUp])
 
   // Initialize menu position when settings open
   React.useEffect(() => {
     if (showSettings) {
       initializeMenuPosition()
     }
-  }, [showSettings, labelX, labelY])
+  }, [showSettings, labelX, labelY, initializeMenuPosition])
 
   return (
     <>

@@ -52,6 +52,72 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
     }
   }, [selected, isEditing, text])
 
+  const formatText = (text: string, hideCollapsed = false) => {
+    if (format === 'plain') return text
+    
+    const lines = text.split('\n')
+    const formattedLines: string[] = []
+    let skipUntilNextToggle = false
+    let currentToggleDepth = 0
+    
+    lines.forEach((line, index) => {
+      // Get indentation level
+      const indentMatch = line.match(/^(\s*)/)
+      const indent = indentMatch ? indentMatch[1] : ''
+      const indentLevel = Math.floor(indent.length / 2)
+      
+      // Remove existing markers to get clean content
+      let cleanLine = line.trimStart()
+      if (format === 'bullet') {
+        cleanLine = cleanLine.replace(/^[•·▸▹◦‣⁃]\s*/, '')
+        if (cleanLine || line.trim()) formattedLines.push(indent + `• ${cleanLine}`)
+        else formattedLines.push(line)
+      } else if (format === 'numbered') {
+        cleanLine = cleanLine.replace(/^\d+\.\s*/, '')
+        if (cleanLine || line.trim()) {
+          const num = formattedLines.filter(l => l.match(/^\s*\d+\./)).length + 1
+          formattedLines.push(indent + `${num}. ${cleanLine}`)
+        } else formattedLines.push(line)
+      } else if (format === 'checklist') {
+        cleanLine = cleanLine.replace(/^[☐☑✓✗□☒]\s*/, '')
+        const wasChecked = line.match(/^[☑✓☒]/)
+        if (cleanLine || line.trim()) formattedLines.push(indent + `${wasChecked ? '☑' : '☐'} ${cleanLine}`)
+        else formattedLines.push(line)
+      } else if (format === 'toggle') {
+        // For toggle format, show toggle marker immediately, even on empty lines
+        cleanLine = cleanLine.replace(/^[▸▾▹▿]\s*/, '')
+        
+        // Always show toggle for lines with proper indentation (including empty ones in edit mode)
+        if (cleanLine || (!hideCollapsed && line.match(/^\s*$/))) {
+          // This is either a content line or an empty line in edit mode
+          const isExpanded = toggleStates[index] !== false
+          formattedLines.push(indent + `${isExpanded ? '▾' : '▸'} ${cleanLine}`)
+          
+          // Skip subsequent lines that are more indented if collapsed
+          if (!isExpanded && hideCollapsed && cleanLine) {
+            skipUntilNextToggle = true
+            currentToggleDepth = indentLevel
+          } else {
+            skipUntilNextToggle = false
+          }
+        } else if (indentLevel > currentToggleDepth && skipUntilNextToggle) {
+          // Skip this line - it's nested under a collapsed toggle
+          return
+        } else {
+          // Completely empty line (no indent) - just pass through
+          formattedLines.push(line)
+          if (indentLevel <= currentToggleDepth) {
+            skipUntilNextToggle = false
+          }
+        }
+      } else {
+        formattedLines.push(line)
+      }
+    })
+    
+    return formattedLines.join('\n')
+  }
+
   // Focus textarea at end when entering edit mode
   useEffect(() => {
     if (isEditing && textareaRef.current) {
@@ -60,7 +126,7 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
       const formattedLength = formatText(text).length
       textareaRef.current.setSelectionRange(formattedLength, formattedLength)
     }
-  }, [isEditing])
+  }, [isEditing, formatText, text])
 
   const updateNodeData = (updates: Partial<TextNodeData>) => {
     reactFlow.setNodes((nodes) =>
@@ -338,72 +404,6 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
     }
   }
 
-  const formatText = (text: string, hideCollapsed = false) => {
-    if (format === 'plain') return text
-    
-    const lines = text.split('\n')
-    const formattedLines: string[] = []
-    let skipUntilNextToggle = false
-    let currentToggleDepth = 0
-    
-    lines.forEach((line, index) => {
-      // Get indentation level
-      const indentMatch = line.match(/^(\s*)/)
-      const indent = indentMatch ? indentMatch[1] : ''
-      const indentLevel = Math.floor(indent.length / 2)
-      
-      // Remove existing markers to get clean content
-      let cleanLine = line.trimStart()
-      if (format === 'bullet') {
-        cleanLine = cleanLine.replace(/^[•·▸▹◦‣⁃]\s*/, '')
-        if (cleanLine || line.trim()) formattedLines.push(indent + `• ${cleanLine}`)
-        else formattedLines.push(line)
-      } else if (format === 'numbered') {
-        cleanLine = cleanLine.replace(/^\d+\.\s*/, '')
-        if (cleanLine || line.trim()) {
-          const num = formattedLines.filter(l => l.match(/^\s*\d+\./)).length + 1
-          formattedLines.push(indent + `${num}. ${cleanLine}`)
-        } else formattedLines.push(line)
-      } else if (format === 'checklist') {
-        cleanLine = cleanLine.replace(/^[☐☑✓✗□☒]\s*/, '')
-        const wasChecked = line.match(/^[☑✓☒]/)
-        if (cleanLine || line.trim()) formattedLines.push(indent + `${wasChecked ? '☑' : '☐'} ${cleanLine}`)
-        else formattedLines.push(line)
-      } else if (format === 'toggle') {
-        // For toggle format, show toggle marker immediately, even on empty lines
-        cleanLine = cleanLine.replace(/^[▸▾▹▿]\s*/, '')
-        
-        // Always show toggle for lines with proper indentation (including empty ones in edit mode)
-        if (cleanLine || (!hideCollapsed && line.match(/^\s*$/))) {
-          // This is either a content line or an empty line in edit mode
-          const isExpanded = toggleStates[index] !== false
-          formattedLines.push(indent + `${isExpanded ? '▾' : '▸'} ${cleanLine}`)
-          
-          // Skip subsequent lines that are more indented if collapsed
-          if (!isExpanded && hideCollapsed && cleanLine) {
-            skipUntilNextToggle = true
-            currentToggleDepth = indentLevel
-          } else {
-            skipUntilNextToggle = false
-          }
-        } else if (indentLevel > currentToggleDepth && skipUntilNextToggle) {
-          // Skip this line - it's nested under a collapsed toggle
-          return
-        } else {
-          // Completely empty line (no indent) - just pass through
-          formattedLines.push(line)
-          if (indentLevel <= currentToggleDepth) {
-            skipUntilNextToggle = false
-          }
-        }
-      } else {
-        formattedLines.push(line)
-      }
-    })
-    
-    return formattedLines.join('\n')
-  }
-
   const toggleChecklistItem = (lineIndex: number) => {
     if (format !== 'checklist') return
     
@@ -541,7 +541,7 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
                     const rawLines = text.split('\n')
                     const formattedText = formatText(text, true)
                     const formattedLines = formattedText.split('\n')
-                    const clickAreas: JSX.Element[] = []
+                    const clickAreas: React.JSX.Element[] = []
                     
                     // Create a mapping of visible formatted lines to original line indices
                     let formattedIndex = 0

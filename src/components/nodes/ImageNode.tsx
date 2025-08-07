@@ -1,5 +1,6 @@
 import { memo, useState, useRef } from 'react'
 import { NodeProps, useReactFlow } from 'reactflow'
+import Image from 'next/image'
 import { NodeHandles } from './NodeHandles'
 
 interface ImageNodeData {
@@ -103,7 +104,7 @@ export const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeData>)
       <div className="relative h-[200px] bg-gray-100 flex items-center justify-center">
         {url && !mode ? (
           <>
-            <img src={url} alt={caption} className="w-full h-full object-cover" />
+            <Image src={url} alt={caption || 'Image'} fill className="object-cover" />
             <button
               onClick={() => setMode('url')}
               className="absolute top-2 right-2 px-2 py-1 bg-white bg-opacity-90 text-gray-800 text-xs rounded shadow hover:bg-opacity-100 transition-all"

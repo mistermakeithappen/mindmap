@@ -309,7 +309,7 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
         document.removeEventListener('mouseup', handleToolsMouseUp)
       }
     }
-  }, [isDraggingTools, toolsDragOffset])
+  }, [isDraggingTools, toolsDragOffset, handleToolsMouseMove, handleToolsMouseUp])
 
   // Update nodes to add drag-target class to hovered synapse
   const nodesWithDragTarget = nodes.map(node => ({
