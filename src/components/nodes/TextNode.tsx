@@ -1,6 +1,7 @@
-import { memo, useState, useRef, useEffect } from 'react'
-import { NodeProps, useReactFlow } from 'reactflow'
+import { memo, useState, useRef, useEffect, useCallback } from 'react'
+import { NodeProps, useReactFlow, NodeResizer } from 'reactflow'
 import { NodeHandles } from './NodeHandles'
+import { DragHandle } from './DragHandle'
 
 interface TextNodeData {
   text?: string
@@ -14,7 +15,7 @@ interface AIOption {
   reasoning: string
 }
 
-export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
+export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNodeData>) => {
   const [text, setText] = useState(data.text || '')
   const [format, setFormat] = useState<'plain' | 'bullet' | 'numbered' | 'checklist' | 'toggle'>(data.format || 'plain')
   const [toggleStates, setToggleStates] = useState<Record<number, boolean>>(data.toggleStates || {})
@@ -26,6 +27,14 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
   const [error, setError] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const reactFlow = useReactFlow()
+
+  const updateNodeData = useCallback((updates: Partial<TextNodeData>) => {
+    reactFlow.setNodes((nodes) =>
+      nodes.map((node) =>
+        node.id === id ? { ...node, data: { ...node.data, ...updates } } : node
+      )
+    )
+  }, [id, reactFlow])
 
   // Auto-enter edit mode when selected and user types
   useEffect(() => {
@@ -50,7 +59,7 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
       window.addEventListener('keypress', handleKeyPress)
       return () => window.removeEventListener('keypress', handleKeyPress)
     }
-  }, [selected, isEditing, text])
+  }, [selected, isEditing, text, updateNodeData])
 
   // Focus textarea at end when entering edit mode
   useEffect(() => {
@@ -60,15 +69,8 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
       const formattedLength = formatText(text).length
       textareaRef.current.setSelectionRange(formattedLength, formattedLength)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditing])
-
-  const updateNodeData = (updates: Partial<TextNodeData>) => {
-    reactFlow.setNodes((nodes) =>
-      nodes.map((node) =>
-        node.id === id ? { ...node, data: { ...node.data, ...updates } } : node
-      )
-    )
-  }
 
   const toggleLine = (lineIndex: number) => {
     const newStates = { ...toggleStates, [lineIndex]: !toggleStates[lineIndex] }
@@ -338,7 +340,7 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
     }
   }
 
-  const formatText = (text: string, hideCollapsed = false) => {
+  const formatText = useCallback((text: string, hideCollapsed = false) => {
     if (format === 'plain') return text
     
     const lines = text.split('\n')
@@ -402,7 +404,7 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
     })
     
     return formattedLines.join('\n')
-  }
+  }, [format, toggleStates])
 
   const toggleChecklistItem = (lineIndex: number) => {
     if (format !== 'checklist') return
@@ -454,11 +456,20 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
 
   return (
     <>
-      <div className={`relative bg-white rounded-lg shadow-md border-2 ${selected ? 'border-blue-500' : 'border-gray-200'} min-w-[300px] min-h-[200px] flex flex-col overflow-hidden`}>
-        <NodeHandles />
+      <NodeResizer 
+        isVisible={selected}
+        minWidth={300}
+        minHeight={200}
+        color="#3b82f6"
+        handleStyle={{ width: '10px', height: '10px' }}
+      />
+      <NodeHandles />
+      <div className={`relative bg-white rounded-lg shadow-md border-2 ${selected ? 'border-blue-500' : 'border-gray-200'} w-full h-full flex flex-col overflow-hidden`}>
+        {/* Drag handle at the top */}
+        <DragHandle position="top" />
         
         {/* Main text area */}
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden pt-6">
           {isEditing ? (
             <textarea
               ref={textareaRef}
@@ -501,6 +512,8 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
             <div 
               onClick={() => setIsEditing(true)} 
               className="absolute inset-0 cursor-text text-gray-800 whitespace-pre-wrap p-4 overflow-auto"
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
             >
               {formatText(text, true) || (
                 <span className="text-gray-400">
@@ -541,7 +554,7 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
                     const rawLines = text.split('\n')
                     const formattedText = formatText(text, true)
                     const formattedLines = formattedText.split('\n')
-                    const clickAreas: JSX.Element[] = []
+                    const clickAreas: React.JSX.Element[] = []
                     
                     // Create a mapping of visible formatted lines to original line indices
                     let formattedIndex = 0
@@ -598,14 +611,15 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
       {/* Format Toolbar - Show above node when selected */}
       {selected && (
         <div 
-          className="absolute bg-white rounded-lg shadow-xl border border-gray-200 p-2 animate-fadeInUp"
+          className="absolute bg-white rounded-lg shadow-xl border border-gray-200 p-2 transition-opacity duration-150"
           style={{
             bottom: 'calc(100% + 12px)',
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 9999,
             minWidth: 'max-content',
-            pointerEvents: 'auto',
+            pointerEvents: dragging ? 'none' : 'auto',
+            opacity: dragging ? 0.1 : 1,
           }}
         >
           {/* Arrow pointing down to node */}
@@ -710,7 +724,7 @@ export const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) =
       {/* AI Analysis Panel - Only show when selected and has text */}
       {selected && text.trim() && (
         <div 
-          className="absolute w-80 bg-white rounded-lg shadow-2xl border border-gray-200 animate-fadeInDown"
+          className="absolute w-80 bg-white rounded-lg shadow-2xl border border-gray-200"
           style={{
             top: 'calc(100% + 20px)',
             left: '50%',

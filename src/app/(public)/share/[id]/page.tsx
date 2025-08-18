@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { CanvasWrapper } from '@/components/CanvasWrapper'
 import { useCanvasStore } from '@/lib/store/canvas-store'
@@ -16,20 +17,7 @@ export default function SharedCanvasPage() {
   const supabase = createClient()
   const { setNodes, setEdges } = useCanvasStore()
 
-  useEffect(() => {
-    // Clear stores before loading new canvas
-    setNodes([])
-    setEdges([])
-    loadCanvas()
-    
-    // Cleanup function to clear stores on unmount
-    return () => {
-      setNodes([])
-      setEdges([])
-    }
-  }, [canvasId])
-
-  const loadCanvas = async () => {
+  const loadCanvas = useCallback(async () => {
     try {
       // Load canvas details - only load if it's public
       const { data: canvasData, error: canvasError } = await supabase
@@ -77,15 +65,20 @@ export default function SharedCanvasPage() {
           ...(node.type === 'synapse' && { canvasId })
         },
         style: node.style,
+        width: node.width,
+        height: node.height,
       })) || []
 
       const transformedEdges = edgesData?.map(edge => ({
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        type: edge.type,
-        label: edge.label,
-        style: edge.style,
+        sourceHandle: edge.source_handle || undefined,
+        targetHandle: edge.target_handle || undefined,
+        type: edge.type || 'default',
+        label: edge.label || undefined,
+        style: edge.style || {},
+        data: edge.data || {},
       })) || []
 
       setNodes(transformedNodes)
@@ -96,7 +89,20 @@ export default function SharedCanvasPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [canvasId, setEdges, setNodes, supabase])
+
+  useEffect(() => {
+    // Clear stores before loading new canvas
+    setNodes([])
+    setEdges([])
+    loadCanvas()
+    
+    // Cleanup function to clear stores on unmount
+    return () => {
+      setNodes([])
+      setEdges([])
+    }
+  }, [canvasId, loadCanvas, setEdges, setNodes])
 
   if (loading) {
     return (
@@ -112,12 +118,12 @@ export default function SharedCanvasPage() {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-800 mb-4">Mind Map Not Found</h1>
           <p className="text-gray-600 mb-6">{error}</p>
-          <a 
+          <Link 
             href="/" 
             className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
           >
             Go to Home
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -138,12 +144,12 @@ export default function SharedCanvasPage() {
           <span className="text-sm text-gray-500">
             Read-only view
           </span>
-          <a 
+          <Link 
             href="/" 
             className="px-3 py-1 text-purple-600 hover:text-purple-700 text-sm font-medium"
           >
             Create Your Own
-          </a>
+          </Link>
         </div>
       </div>
       <div className="flex-1">

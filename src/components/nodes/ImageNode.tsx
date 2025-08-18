@@ -1,13 +1,14 @@
 import { memo, useState, useRef } from 'react'
 import { NodeProps, useReactFlow } from 'reactflow'
 import { NodeHandles } from './NodeHandles'
+import Image from 'next/image'
 
 interface ImageNodeData {
   url?: string
   caption?: string
 }
 
-export const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeData>) => {
+export const ImageNode = memo(({ id, data, selected, dragging }: NodeProps<ImageNodeData>) => {
   const [url, setUrl] = useState(data.url || '')
   const [caption, setCaption] = useState(data.caption || '')
   const [mode, setMode] = useState<'url' | 'upload' | 'generate' | null>(null)
@@ -103,10 +104,17 @@ export const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeData>)
       <div className="relative h-[200px] bg-gray-100 flex items-center justify-center">
         {url && !mode ? (
           <>
-            <img src={url} alt={caption} className="w-full h-full object-cover" />
+            <Image 
+              src={url} 
+              alt={caption || 'Image'} 
+              fill
+              className="object-cover"
+              sizes="(max-width: 300px) 100vw, 300px"
+            />
             <button
               onClick={() => setMode('url')}
               className="absolute top-2 right-2 px-2 py-1 bg-white bg-opacity-90 text-gray-800 text-xs rounded shadow hover:bg-opacity-100 transition-all"
+              style={{ opacity: dragging ? 0.1 : 1, pointerEvents: dragging ? 'none' : 'auto' }}
             >
               Change
             </button>

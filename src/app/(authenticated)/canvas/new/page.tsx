@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -20,11 +20,7 @@ export default function NewCanvas() {
   const router = useRouter()
   const supabase = createClient()
 
-  useEffect(() => {
-    loadFolders()
-  }, [])
-
-  const loadFolders = async () => {
+  const loadFolders = useCallback(async () => {
     const { data } = await supabase
       .from('folders')
       .select('*')
@@ -33,7 +29,11 @@ export default function NewCanvas() {
     if (data) {
       setFolders(data)
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadFolders()
+  }, [loadFolders])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

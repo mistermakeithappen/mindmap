@@ -203,21 +203,27 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
     }
   }
 
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    
-    console.log('Context menu triggered, setting editing to true')
-    // Directly open the editor on right-click
+  const handleRename = () => {
+    console.log('Rename triggered from context menu')
     setIsEditing(true)
   }
+  
+  // Expose rename function through React Flow
+  useEffect(() => {
+    reactFlow.setNodes((nodes) =>
+      nodes.map((node) =>
+        node.id === id 
+          ? { ...node, data: { ...node.data, handleRename, subCanvasId: actualSubCanvasId } }
+          : node
+      )
+    )
+  }, [id, reactFlow, actualSubCanvasId])
 
   return (
     <div 
       className={`relative ${selected ? 'ring-4 ring-purple-500 ring-opacity-50' : ''}`}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
-      onContextMenu={handleContextMenu}
     >
       <NodeHandles />
       
@@ -269,7 +275,6 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
               className="text-sm font-semibold bg-black bg-opacity-70 text-white px-2 py-1 rounded border-2 border-purple-400 focus:outline-none focus:border-purple-300"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
-              onContextMenu={(e) => e.stopPropagation()}
             />
           ) : (
             <h3 className="text-sm font-semibold text-white mb-1">
@@ -310,7 +315,7 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
         {/* Click hint */}
         {isHovering && (
           <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-            {actualSubCanvasId ? 'Click to enter • Right-click to rename' : 'Click to create sub-canvas • Right-click to rename'}
+            {actualSubCanvasId ? 'Click to enter • Right-click for options' : 'Click to create sub-canvas • Right-click for options'}
           </div>
         )}
       </div>
@@ -336,12 +341,6 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
           onClick={(e) => {
             e.stopPropagation()
             handleClick()
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            console.log('Context menu on click handler, setting editing to true')
-            setIsEditing(true)
           }}
         />
       )}

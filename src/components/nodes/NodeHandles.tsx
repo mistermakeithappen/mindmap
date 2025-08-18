@@ -2,15 +2,14 @@ import { Handle, Position } from 'reactflow'
 
 export function NodeHandles() {
   const handleStyle = {
-    background: '#ef4444', // red-500
+    background: 'white',
     width: 12,
     height: 12,
-    border: '2px solid white',
+    border: '2px solid black',
     transition: 'all 0.2s ease-in-out',
-    zIndex: 100, // Ensure handles are above other elements
   }
 
-  const handleClassName = "hover:scale-125 shadow-md"
+  const handleClassName = "shadow-md"
 
   return (
     <>

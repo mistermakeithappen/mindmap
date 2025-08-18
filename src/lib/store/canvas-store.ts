@@ -43,18 +43,31 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   },
   
   onConnect: (connection) => {
+    // Check if this is an automation connection
+    const nodes = get().nodes
+    const sourceNode = nodes.find(n => n.id === connection.source)
+    const targetNode = nodes.find(n => n.id === connection.target)
+    
+    const automationNodeTypes = ['trigger', 'action', 'ifElse', 'wait']
+    const isAutomationConnection = 
+      sourceNode && targetNode &&
+      automationNodeTypes.includes(sourceNode.type || '') &&
+      automationNodeTypes.includes(targetNode.type || '')
+    
     const edgeWithId = {
       ...connection,
       id: uuidv4(),
-      type: 'default',
-      data: {},
+      type: isAutomationConnection ? 'automation' : 'default',
+      data: {
+        isAutomationType: isAutomationConnection,
+      },
       markerEnd: {
         type: 'arrowclosed',
         width: 20,
         height: 20,
       },
       style: {
-        stroke: '#6b7280',
+        stroke: isAutomationConnection ? '#8b5cf6' : '#6b7280',
         strokeWidth: 2,
       },
     }
@@ -78,9 +91,41 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   },
   
   deleteNode: (id) => {
+    const nodes = get().nodes
+    const nodeToDelete = nodes.find(n => n.id === id)
+    
+    // Log synapse deletion for debugging
+    if (nodeToDelete?.type === 'synapse') {
+      console.log('Deleting synapse node:', {
+        id: nodeToDelete.id,
+        subCanvasId: nodeToDelete.data?.subCanvasId,
+        label: nodeToDelete.data?.label
+      })
+    }
+    
+    // Find all child nodes (nodes that have this node as parent)
+    const getDescendants = (parentId: string): string[] => {
+      const children = nodes.filter(n => n.parentId === parentId)
+      const descendantIds = children.map(c => c.id)
+      
+      // Recursively find descendants of children
+      children.forEach(child => {
+        descendantIds.push(...getDescendants(child.id))
+      })
+      
+      return descendantIds
+    }
+    
+    // Get all nodes to delete (the node itself and all its descendants)
+    const nodesToDelete = [id, ...getDescendants(id)]
+    console.log(`Deleting node ${id} and its ${nodesToDelete.length - 1} descendants`)
+    
+    // Filter out deleted nodes and their associated edges
     set({
-      nodes: get().nodes.filter((node) => node.id !== id),
-      edges: get().edges.filter((edge) => edge.source !== id && edge.target !== id)
+      nodes: nodes.filter((node) => !nodesToDelete.includes(node.id)),
+      edges: get().edges.filter((edge) => 
+        !nodesToDelete.includes(edge.source) && !nodesToDelete.includes(edge.target)
+      )
     })
   },
   
@@ -93,8 +138,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   },
   
   removeEdge: (id) => {
+    const currentEdges = get().edges
+    const newEdges = currentEdges.filter((edge) => edge.id !== id)
+    console.log(`Removing edge ${id}. Before: ${currentEdges.length} edges, After: ${newEdges.length} edges`)
     set({
-      edges: get().edges.filter((edge) => edge.id !== id)
+      edges: newEdges
     })
   },
   

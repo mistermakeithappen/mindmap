@@ -15,7 +15,7 @@ const colors = [
   { name: 'Yellow', value: 'bg-yellow-100 border-yellow-400', rgba: 'rgba(254, 249, 195, 0.3)' },
 ]
 
-export const GroupNode = memo(({ id, data = {}, selected }: NodeProps<GroupNodeData>) => {
+export const GroupNode = memo(({ id, data = {}, selected, dragging }: NodeProps<GroupNodeData>) => {
   const [isEditing, setIsEditing] = useState(false)
   const [label, setLabel] = useState(data.label || 'Group')
   const colorData = colors.find(c => c.value === data.color) || colors[0]
@@ -82,7 +82,7 @@ export const GroupNode = memo(({ id, data = {}, selected }: NodeProps<GroupNodeD
               )}
             </div>
             
-            <div className="flex gap-1">
+            <div className="flex gap-1 transition-opacity duration-150" style={{ opacity: dragging ? 0.1 : 1, pointerEvents: dragging ? 'none' : 'auto' }}>
               {colors.map((c) => (
                 <button
                   key={c.name}

@@ -130,3 +130,13 @@
 .animate-fadeInUp {
   animation: fadeInUp 0.2s ease-out forwards;
 }
+
+/* Ensure React Flow handles are always on top */
+.react-flow__handle {
+  z-index: 10000 !important;
+}
+
+/* Ensure connection lines appear below handles */
+.react-flow__edge {
+  z-index: 1 !important;
+}

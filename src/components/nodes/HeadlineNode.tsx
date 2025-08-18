@@ -110,7 +110,7 @@ export const HeadlineNode = memo(({ id, data, selected }: NodeProps<HeadlineNode
       {/* Floating Settings Panel - Only show when selected */}
       {selected && (
         <div 
-          className="absolute w-72 bg-white rounded-lg shadow-2xl p-4 border border-gray-200 animate-fadeInSide"
+          className="absolute w-72 bg-white rounded-lg shadow-2xl p-4 border border-gray-200"
           style={{
             top: '50%',
             left: 'calc(100% + 20px)',
