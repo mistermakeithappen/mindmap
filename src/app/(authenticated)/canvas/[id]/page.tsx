@@ -7,6 +7,7 @@ import { CanvasWrapper } from '@/components/CanvasWrapper'
 import { CanvasHierarchySidebar } from '@/components/CanvasHierarchySidebar'
 import { useCanvasStore } from '@/lib/store/canvas-store'
 import type { Canvas as CanvasType } from '@/utils/supabase/types'
+import { exportCanvas, downloadCanvasAsJSON, downloadCanvasAsHTML } from '@/utils/canvas-export'
 
 export default function CanvasPage() {
   const params = useParams()
@@ -18,8 +19,18 @@ export default function CanvasPage() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editTitle, setEditTitle] = useState('')
+  const [showExportMenu, setShowExportMenu] = useState(false)
   const supabase = createClient()
   const { nodes, edges, setNodes, setEdges } = useCanvasStore()
+
+  // Close export menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setShowExportMenu(false)
+    if (showExportMenu) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [showExportMenu])
 
   const loadCanvas = useCallback(async () => {
     try {
@@ -390,6 +401,36 @@ export default function CanvasPage() {
     }
   }
 
+  const handleExportJSON = () => {
+    if (!canvas) return
+    
+    const exportData = exportCanvas(
+      canvasId,
+      canvas.name,
+      canvas.description || undefined,
+      nodes,
+      edges
+    )
+    
+    downloadCanvasAsJSON(exportData)
+    setShowExportMenu(false)
+  }
+
+  const handleExportHTML = () => {
+    if (!canvas) return
+    
+    const exportData = exportCanvas(
+      canvasId,
+      canvas.name,
+      canvas.description || undefined,
+      nodes,
+      edges
+    )
+    
+    downloadCanvasAsHTML(exportData)
+    setShowExportMenu(false)
+  }
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -435,6 +476,48 @@ export default function CanvasPage() {
               Saved at {lastSaved.toLocaleTimeString()}
             </span>
           )}
+          <div className="relative">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowExportMenu(!showExportMenu)
+              }}
+              className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm flex items-center gap-1"
+              title="Export options"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-50 border border-gray-200">
+                <button
+                  onClick={handleExportJSON}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Export as JSON
+                  <span className="text-xs text-gray-500">(Import-ready)</span>
+                </button>
+                <button
+                  onClick={handleExportHTML}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                  Export as HTML
+                  <span className="text-xs text-gray-500">(Shareable)</span>
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={saveCanvas}
             className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm"

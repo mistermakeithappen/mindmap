@@ -68,7 +68,7 @@ export const WaitNode = memo(({ id, data, selected }: NodeProps<WaitNodeData>) =
             value={waitType}
             onChange={(e) => {
               const newType = e.target.value as WaitNodeData['waitType']
-              setWaitType(newType)
+              setWaitType(newType || 'time')
               updateNodeData({ waitType: newType })
             }}
             className="w-full text-xs border border-gray-300 rounded px-2 py-1 outline-none focus:border-yellow-500"
@@ -128,7 +128,7 @@ export const WaitNode = memo(({ id, data, selected }: NodeProps<WaitNodeData>) =
                 value={waitTimeUnit}
                 onChange={(e) => {
                   const unit = e.target.value as WaitNodeData['waitTimeUnit']
-                  setWaitTimeUnit(unit)
+                  setWaitTimeUnit(unit || 'seconds')
                   updateNodeData({ waitTimeUnit: unit })
                 }}
                 className="text-xs border border-gray-300 rounded px-2 py-1 outline-none focus:border-yellow-500"

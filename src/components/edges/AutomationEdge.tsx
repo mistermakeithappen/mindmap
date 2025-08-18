@@ -179,7 +179,7 @@ export function AutomationEdge({
       <defs>
         <filter id="laserGlow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-          <feFlood flood-color="#00ffff" flood-opacity="0.5"/>
+          <feFlood floodColor="#00ffff" floodOpacity="0.5"/>
           <feComposite in2="coloredBlur" operator="in"/>
           <feMerge>
             <feMergeNode/>

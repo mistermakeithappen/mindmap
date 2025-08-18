@@ -122,6 +122,7 @@ export const FileNode = memo(({ id, data, selected, dragging }: NodeProps<FileNo
     // Image files
     if (fileType.startsWith('image/')) {
       return (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={url}
           alt={fileName}

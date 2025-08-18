@@ -154,7 +154,7 @@ export const TriggerNode = memo(({ id, data, selected }: NodeProps<TriggerNodeDa
             value={triggerType}
             onChange={(e) => {
               const newType = e.target.value as TriggerNodeData['triggerType']
-              setTriggerType(newType)
+              setTriggerType(newType || 'manual')
               updateNodeData({ triggerType: newType })
             }}
             className="bg-transparent text-white text-xs border border-white/30 rounded px-1 outline-none"

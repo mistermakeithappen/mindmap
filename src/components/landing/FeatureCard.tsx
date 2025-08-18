@@ -15,6 +15,7 @@ export function FeatureCard({ icon, title, description, color, delay = 0 }: Feat
   const cardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    const currentCard = cardRef.current
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -26,13 +27,13 @@ export function FeatureCard({ icon, title, description, color, delay = 0 }: Feat
       { threshold: 0.1 }
     )
 
-    if (cardRef.current) {
-      observer.observe(cardRef.current)
+    if (currentCard) {
+      observer.observe(currentCard)
     }
 
     return () => {
-      if (cardRef.current) {
-        observer.unobserve(cardRef.current)
+      if (currentCard) {
+        observer.unobserve(currentCard)
       }
     }
   }, [delay])

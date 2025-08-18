@@ -45,7 +45,7 @@ export const CanvasParagraphNode = memo(({ id, data, selected, dragging }: NodeP
       sel?.removeAllRanges()
       sel?.addRange(range)
     }
-  }, [isEditing])
+  }, [isEditing, text])
 
   // Measure text dimensions and auto-resize
   useEffect(() => {

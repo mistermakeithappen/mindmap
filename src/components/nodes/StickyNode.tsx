@@ -52,7 +52,7 @@ export const StickyNode = memo(({ id, data, selected, dragging }: NodeProps<Stic
   }
 
   const handleShapeChange = (newShape: StickyNodeData['shape']) => {
-    setShape(newShape)
+    setShape(newShape || 'square')
     updateNodeData({ shape: newShape })
   }
 

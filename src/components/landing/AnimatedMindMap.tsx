@@ -22,7 +22,7 @@ interface Connection {
 
 export function AnimatedMindMap() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animationRef = useRef<number>()
+  const animationRef = useRef<number | undefined>(undefined)
   const nodesRef = useRef<Node[]>([])
   const connectionsRef = useRef<Connection[]>([])
   const mouseRef = useRef({ x: 0, y: 0 })

@@ -45,7 +45,7 @@ export const CanvasHeadlineNode = memo(({ id, data, selected, dragging }: NodePr
       sel?.removeAllRanges()
       sel?.addRange(range)
     }
-  }, [isEditing])
+  }, [isEditing, text])
 
   // Measure text width and auto-resize
   useEffect(() => {
