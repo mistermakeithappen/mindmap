@@ -16,6 +16,8 @@ import ReactFlow, {
 import 'reactflow/dist/style.css'
 import { v4 as uuidv4 } from 'uuid'
 import { useCanvasStore } from '@/lib/store/canvas-store'
+import { useClipboardStore } from '@/lib/store/clipboard-store'
+import { useNodeGroupsStore } from '@/lib/store/node-groups-store'
 import { TextNode } from './nodes/TextNode'
 import { ImageNode } from './nodes/ImageNode'
 import { LinkNode } from './nodes/LinkNode'
@@ -37,6 +39,7 @@ import { CustomEdge } from './edges/CustomEdge'
 import { AutomationEdge } from './edges/AutomationEdge'
 import { NodeContextMenu } from './NodeContextMenu'
 import { SynapseNodeContextMenu } from './SynapseNodeContextMenu'
+import { CanvasContextMenu } from './CanvasContextMenu'
 
 // Define nodeTypes outside component to prevent React Flow warnings
 const nodeTypes = {
@@ -71,19 +74,30 @@ interface CanvasProps {
 
 function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
-  const { screenToFlowPosition, getNodes, getNode } = useReactFlow()
+  const { screenToFlowPosition, getNodes, getNode, getEdges, setNodes } = useReactFlow()
   const [hoveredSynapseId, setHoveredSynapseId] = useState<string | null>(null)
   const [toolsPanelPosition, setToolsPanelPosition] = useState({ x: 20, y: 80 })
   const [isDraggingTools, setIsDraggingTools] = useState(false)
   const [toolsDragOffset, setToolsDragOffset] = useState({ x: 0, y: 0 })
-  const [contextMenu, setContextMenu] = useState<{ node: Node | null; position: { x: number; y: number } }>({
-    node: null,
+  const [contextMenu, setContextMenu] = useState<{ nodes: Node[]; position: { x: number; y: number } }>({
+    nodes: [],
     position: { x: 0, y: 0 }
   })
   const [synapseContextMenu, setSynapseContextMenu] = useState<{ node: Node | null; position: { x: number; y: number } }>({
     node: null,
     position: { x: 0, y: 0 }
   })
+  const [canvasContextMenu, setCanvasContextMenu] = useState<{ show: boolean; position: { x: number; y: number } }>({
+    show: false,
+    position: { x: 0, y: 0 }
+  })
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
+  const [dragStartPositions, setDragStartPositions] = useState<Map<string, { x: number; y: number }>>(new Map())
+  
+  // Use global clipboard store
+  const { copiedNodes, copiedEdges, setCopiedNodes, setCopiedEdges } = useClipboardStore()
+  // Use node groups store
+  const { getGroupedNodes, getNodeGroup } = useNodeGroupsStore()
   const {
     nodes,
     edges,
@@ -251,12 +265,69 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
     event.dataTransfer.dropEffect = 'move'
   }, [])
 
-  // Handle node drag to detect when dragging over synapse
+  // Handle node drag start to store initial positions
+  const onNodeDragStart: NodeDragHandler = useCallback((event, node) => {
+    // Get all grouped nodes
+    const groupedNodeIds = getGroupedNodes(node.id)
+    console.log('onNodeDragStart - node:', node.id, 'grouped with:', groupedNodeIds)
+    
+    if (groupedNodeIds.length > 0) {
+      const allNodes = getNodes()
+      const positions = new Map<string, { x: number; y: number }>()
+      
+      // Store initial positions of all grouped nodes INCLUDING the dragged node
+      groupedNodeIds.forEach(nodeId => {
+        const groupedNode = allNodes.find(n => n.id === nodeId)
+        if (groupedNode) {
+          positions.set(nodeId, { x: groupedNode.position.x, y: groupedNode.position.y })
+          console.log('Storing initial position for', nodeId, ':', groupedNode.position)
+        }
+      })
+      
+      setDragStartPositions(positions)
+    } else {
+      // Clear positions if not grouped
+      setDragStartPositions(new Map())
+    }
+  }, [getNodes, getGroupedNodes])
+
+  // Handle node drag to detect when dragging over synapse and move grouped nodes
   const onNodeDrag: NodeDragHandler = useCallback((event, node) => {
     const allNodes = getNodes()
-    const synapseNodes = allNodes.filter(n => n.type === 'synapse')
     
-    // Check if dragging over any synapse node
+    // Handle grouped node movement
+    const groupedNodeIds = getGroupedNodes(node.id)
+    if (groupedNodeIds.length > 0 && dragStartPositions.size > 0) {
+      // Calculate the delta from the dragged node's start position
+      const startPos = dragStartPositions.get(node.id)
+      if (startPos) {
+        const deltaX = node.position.x - startPos.x
+        const deltaY = node.position.y - startPos.y
+        
+        // Update all grouped nodes positions including the one being dragged
+        setNodes((nodes) => 
+          nodes.map((n) => {
+            // Update all grouped nodes
+            if (groupedNodeIds.includes(n.id)) {
+              const originalPos = dragStartPositions.get(n.id)
+              if (originalPos) {
+                return {
+                  ...n,
+                  position: {
+                    x: originalPos.x + deltaX,
+                    y: originalPos.y + deltaY
+                  }
+                }
+              }
+            }
+            return n
+          })
+        )
+      }
+    }
+    
+    // Check if dragging over synapse
+    const synapseNodes = allNodes.filter(n => n.type === 'synapse')
     let foundSynapse = false
     for (const synapse of synapseNodes) {
       if (synapse.id === node.id) continue // Skip if dragging the synapse itself
@@ -287,10 +358,13 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
     if (!foundSynapse) {
       setHoveredSynapseId(null)
     }
-  }, [getNodes])
+  }, [getNodes, getGroupedNodes, dragStartPositions, setNodes])
 
   // Handle node drag stop to nest nodes into synapse
   const onNodeDragStop: NodeDragHandler = useCallback(async (event, node, nodes) => {
+    // Clear drag start positions
+    setDragStartPositions(new Map())
+    
     if (hoveredSynapseId) {
       const synapseNode = getNode(hoveredSynapseId)
       if (synapseNode) {
@@ -396,46 +470,237 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
     event.preventDefault()
     event.stopPropagation()
     
-    if (readOnly) return
+    console.log('=== onNodeContextMenu triggered ===')
     
-    // Check if it's a synapse node
+    if (readOnly) {
+      console.log('Read only mode, returning')
+      return
+    }
+    
+    // Check if it's a synapse node first
     if (node.type === 'synapse') {
+      console.log('Synapse node clicked')
+      setContextMenu({ nodes: [], position: { x: 0, y: 0 } })
+      setCanvasContextMenu({ show: false, position: { x: 0, y: 0 } })
       setSynapseContextMenu({
         node,
         position: { x: event.clientX, y: event.clientY }
       })
-    } else {
-      setContextMenu({
-        node,
-        position: { x: event.clientX, y: event.clientY }
-      })
-    }
-  }, [readOnly])
-
-  // Duplicate node function
-  const duplicateNode = useCallback((node: Node) => {
-    const newNode: Node = {
-      id: uuidv4(),
-      type: node.type,
-      position: {
-        x: node.position.x + 50,
-        y: node.position.y + 50,
-      },
-      data: { ...node.data },
-      style: { ...node.style },
-      width: node.width,
-      height: node.height,
+      return
     }
     
-    addNode(newNode)
-    console.log('Duplicated node:', node.id, 'as', newNode.id)
-  }, [addNode])
+    // Use setTimeout to ensure ReactFlow has updated selection state
+    setTimeout(() => {
+      // Get fresh selection state
+      const currentNodes = getNodes()
+      const selectedNodes = currentNodes.filter(n => n.selected)
+      
+      console.log('After timeout - Selected nodes:', selectedNodes.length, selectedNodes.map(n => n.id))
+      
+      // Clear other menus
+      setSynapseContextMenu({ node: null, position: { x: 0, y: 0 } })
+      setCanvasContextMenu({ show: false, position: { x: 0, y: 0 } })
+      
+      // If multiple nodes are selected (including synapse nodes), show menu for all
+      // Only filter out synapse nodes for individual selection
+      if (selectedNodes.length > 1) {
+        console.log(`Showing menu for ${selectedNodes.length} selected nodes (including synapses)`)
+        setContextMenu({
+          nodes: selectedNodes, // Include all selected nodes, even synapses
+          position: { x: event.clientX, y: event.clientY }
+        })
+      } else if (selectedNodes.length === 1) {
+        // If one node selected, use it (unless it's a synapse, which was handled above)
+        console.log('Showing menu for single selected node')
+        setContextMenu({
+          nodes: selectedNodes,
+          position: { x: event.clientX, y: event.clientY }
+        })
+      } else {
+        // No nodes selected, show menu for clicked node
+        console.log('No selection, showing menu for clicked node:', node.id)
+        setContextMenu({
+          nodes: [node],
+          position: { x: event.clientX, y: event.clientY }
+        })
+      }
+    }, 0) // Minimal delay to let ReactFlow update
+  }, [readOnly, getNodes])
 
-  // Delete node function (wrapper for existing deleteNode)
-  const handleDeleteNode = useCallback((nodeId: string) => {
-    deleteNode(nodeId)
-    console.log('Deleted node:', nodeId)
+  // Handle right-click on canvas background
+  const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    
+    console.log('=== onPaneContextMenu triggered ===')
+    
+    if (readOnly) {
+      console.log('Read only mode, returning')
+      return
+    }
+    
+    // Check if there are selected nodes first
+    const allNodes = getNodes()
+    const selectedNodes = allNodes.filter(n => n.selected) // Include all selected nodes, even synapses
+    
+    console.log('Total nodes:', allNodes.length)
+    console.log('Selected nodes (including synapses):', selectedNodes.length)
+    
+    if (selectedNodes.length > 0) {
+      console.log('Showing context menu for', selectedNodes.length, 'selected nodes')
+      // Show context menu for selected nodes instead of canvas menu
+      setContextMenu({
+        nodes: selectedNodes,
+        position: { x: event.clientX, y: event.clientY }
+      })
+      setSynapseContextMenu({ node: null, position: { x: 0, y: 0 } })
+      setCanvasContextMenu({ show: false, position: { x: 0, y: 0 } })
+      return
+    }
+    
+    // Close other context menus
+    setContextMenu({ nodes: [], position: { x: 0, y: 0 } })
+    setSynapseContextMenu({ node: null, position: { x: 0, y: 0 } })
+    
+    // Show canvas context menu
+    setCanvasContextMenu({
+      show: true,
+      position: { x: event.clientX, y: event.clientY }
+    })
+    
+    // Update mouse position for paste
+    setMousePosition({ x: event.clientX, y: event.clientY })
+  }, [readOnly, getNodes])
+
+  // Copy nodes function
+  const handleCopyNodes = useCallback((nodesToCopy: Node[]) => {
+    setCopiedNodes(nodesToCopy)
+    // Store edges between copied nodes
+    const nodeIds = new Set(nodesToCopy.map(n => n.id))
+    const connectedEdges = edges.filter(edge => 
+      nodeIds.has(edge.source) && nodeIds.has(edge.target)
+    )
+    setCopiedEdges(connectedEdges)
+    console.log('Copied', nodesToCopy.length, 'nodes to global clipboard')
+  }, [edges, setCopiedNodes, setCopiedEdges])
+
+  // Duplicate nodes function
+  const duplicateNodes = useCallback((nodesToDuplicate: Node[]) => {
+    // Calculate center and offset for duplicates
+    const minX = Math.min(...nodesToDuplicate.map(n => n.position.x))
+    const minY = Math.min(...nodesToDuplicate.map(n => n.position.y))
+    
+    // Create ID mapping for edges
+    const idMap = new Map<string, string>()
+    
+    // Duplicate each node with offset
+    const newNodes = nodesToDuplicate.map(node => {
+      const newId = uuidv4()
+      idMap.set(node.id, newId)
+      
+      const newNode: Node = {
+        id: newId,
+        type: node.type,
+        position: {
+          x: node.position.x + 50,
+          y: node.position.y + 50,
+        },
+        data: { ...node.data },
+        style: { ...node.style },
+        width: node.width,
+        height: node.height,
+        selected: false,
+      }
+      
+      return newNode
+    })
+    
+    // Add all new nodes
+    newNodes.forEach(node => addNode(node))
+    
+    // Duplicate edges between nodes
+    const nodeIds = new Set(nodesToDuplicate.map(n => n.id))
+    const edgesToDuplicate = edges.filter(edge => 
+      nodeIds.has(edge.source) && nodeIds.has(edge.target)
+    )
+    
+    edgesToDuplicate.forEach(edge => {
+      onConnect({
+        source: idMap.get(edge.source) || edge.source,
+        target: idMap.get(edge.target) || edge.target,
+        sourceHandle: edge.sourceHandle || null,
+        targetHandle: edge.targetHandle || null,
+      })
+    })
+    
+    console.log('Duplicated', nodesToDuplicate.length, 'nodes')
+  }, [addNode, edges, onConnect])
+
+  // Delete nodes function
+  const handleDeleteNodes = useCallback((nodeIds: string[]) => {
+    nodeIds.forEach(id => deleteNode(id))
+    console.log('Deleted', nodeIds.length, 'nodes')
   }, [deleteNode])
+
+  // Paste nodes at specific position
+  const handlePasteAtPosition = useCallback(() => {
+    if (copiedNodes.length === 0) return
+    
+    // Calculate the center of copied nodes
+    const minX = Math.min(...copiedNodes.map(n => n.position.x))
+    const minY = Math.min(...copiedNodes.map(n => n.position.y))
+    const maxX = Math.max(...copiedNodes.map(n => n.position.x + (n.width || 200)))
+    const maxY = Math.max(...copiedNodes.map(n => n.position.y + (n.height || 100)))
+    const centerX = (minX + maxX) / 2
+    const centerY = (minY + maxY) / 2
+    
+    // Get paste position (canvas context menu position in flow coordinates)
+    const pastePosition = screenToFlowPosition({
+      x: canvasContextMenu.position.x,
+      y: canvasContextMenu.position.y,
+    })
+    
+    // Calculate offset from center to paste position
+    const offsetX = pastePosition.x - centerX
+    const offsetY = pastePosition.y - centerY
+    
+    // Create new nodes with new IDs and adjusted positions
+    const idMap = new Map<string, string>()
+    const newNodes = copiedNodes.map(node => {
+      const newId = uuidv4()
+      idMap.set(node.id, newId)
+      return {
+        ...node,
+        id: newId,
+        position: {
+          x: node.position.x + offsetX,
+          y: node.position.y + offsetY,
+        },
+        selected: false,
+      }
+    })
+    
+    // Create new edges with mapped IDs
+    const newEdges = copiedEdges.map(edge => ({
+      ...edge,
+      id: uuidv4(),
+      source: idMap.get(edge.source) || edge.source,
+      target: idMap.get(edge.target) || edge.target,
+    }))
+    
+    // Add nodes and edges
+    newNodes.forEach(node => addNode(node))
+    newEdges.forEach(edge => {
+      onConnect({
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle || null,
+        targetHandle: edge.targetHandle || null,
+      })
+    })
+    
+    console.log('Pasted', newNodes.length, 'nodes at context menu position')
+  }, [copiedNodes, copiedEdges, canvasContextMenu.position, addNode, onConnect, screenToFlowPosition])
 
   // Handle synapse rename
   const handleSynapseRename = useCallback(() => {
@@ -513,6 +778,135 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
     }
   }, [isDraggingTools, handleToolsMouseMove, handleToolsMouseUp])
 
+  // Track mouse position for paste location
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (reactFlowWrapper.current && reactFlowWrapper.current.contains(e.target as HTMLElement)) {
+        setMousePosition({ x: e.clientX, y: e.clientY })
+      }
+    }
+    document.addEventListener('mousemove', handleMouseMove)
+    return () => document.removeEventListener('mousemove', handleMouseMove)
+  }, [])
+
+  // Handle copy and paste and context menu
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if we're in the canvas and not in an input field
+      if (!reactFlowWrapper.current?.contains(document.activeElement)) return
+      
+      // Context menu for selected nodes (M key for menu, or Shift + Right Arrow)
+      if (e.key === 'm' || e.key === 'M' || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'ArrowRight')) {
+        e.preventDefault()
+        const selectedNodes = nodes.filter(node => node.selected) // Include all selected nodes, even synapses
+        console.log('=== Keyboard shortcut for context menu ===')
+        console.log('Selected nodes (including synapses):', selectedNodes.length)
+        
+        if (selectedNodes.length > 0) {
+          // Open context menu at the center of the viewport
+          const rect = reactFlowWrapper.current?.getBoundingClientRect()
+          if (rect) {
+            const position = { 
+              x: rect.left + rect.width / 2, 
+              y: rect.top + rect.height / 2 
+            }
+            console.log('Opening context menu at:', position)
+            setContextMenu({
+              nodes: selectedNodes,
+              position
+            })
+            // Also close other menus
+            setSynapseContextMenu({ node: null, position: { x: 0, y: 0 } })
+            setCanvasContextMenu({ show: false, position: { x: 0, y: 0 } })
+          }
+        } else {
+          console.log('No nodes selected for context menu')
+        }
+      }
+      
+      // Copy (Cmd/Ctrl + C)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c' && !readOnly) {
+        e.preventDefault()
+        const selectedNodes = nodes.filter(node => node.selected)
+        if (selectedNodes.length > 0) {
+          // Store selected nodes
+          setCopiedNodes(selectedNodes)
+          // Store edges between selected nodes
+          const selectedNodeIds = new Set(selectedNodes.map(n => n.id))
+          const connectedEdges = edges.filter(edge => 
+            selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target)
+          )
+          setCopiedEdges(connectedEdges)
+          console.log('Copied', selectedNodes.length, 'nodes and', connectedEdges.length, 'edges')
+        }
+      }
+      
+      // Paste (Cmd/Ctrl + V)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v' && !readOnly) {
+        e.preventDefault()
+        if (copiedNodes.length > 0) {
+          // Calculate the center of copied nodes
+          const minX = Math.min(...copiedNodes.map(n => n.position.x))
+          const minY = Math.min(...copiedNodes.map(n => n.position.y))
+          const maxX = Math.max(...copiedNodes.map(n => n.position.x + (n.width || 200)))
+          const maxY = Math.max(...copiedNodes.map(n => n.position.y + (n.height || 100)))
+          const centerX = (minX + maxX) / 2
+          const centerY = (minY + maxY) / 2
+          
+          // Get paste position (mouse position in flow coordinates)
+          const pastePosition = screenToFlowPosition({
+            x: mousePosition.x,
+            y: mousePosition.y,
+          })
+          
+          // Calculate offset from center to paste position
+          const offsetX = pastePosition.x - centerX
+          const offsetY = pastePosition.y - centerY
+          
+          // Create new nodes with new IDs and adjusted positions
+          const idMap = new Map<string, string>()
+          const newNodes = copiedNodes.map(node => {
+            const newId = uuidv4()
+            idMap.set(node.id, newId)
+            return {
+              ...node,
+              id: newId,
+              position: {
+                x: node.position.x + offsetX,
+                y: node.position.y + offsetY,
+              },
+              selected: false,
+            }
+          })
+          
+          // Create new edges with mapped IDs
+          const newEdges = copiedEdges.map(edge => ({
+            ...edge,
+            id: uuidv4(),
+            source: idMap.get(edge.source) || edge.source,
+            target: idMap.get(edge.target) || edge.target,
+          }))
+          
+          // Add nodes and edges
+          newNodes.forEach(node => addNode(node))
+          newEdges.forEach(edge => {
+            onConnect({
+              source: edge.source,
+              target: edge.target,
+              sourceHandle: edge.sourceHandle || null,
+              targetHandle: edge.targetHandle || null,
+            })
+          })
+          
+          console.log('Pasted', newNodes.length, 'nodes and', newEdges.length, 'edges at', pastePosition)
+        }
+      }
+    }
+    
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [nodes, edges, copiedNodes, copiedEdges, mousePosition, readOnly, addNode, onConnect, screenToFlowPosition, setCopiedNodes, setCopiedEdges])
+
   // Validation function for connections
   const isValidConnection = useCallback((connection: any) => {
     const sourceNode = nodes.find(n => n.id === connection.source)
@@ -539,7 +933,11 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
   }))
 
   return (
-    <div className="w-full h-full" ref={reactFlowWrapper}>
+    <div 
+      className="w-full h-full" 
+      ref={reactFlowWrapper}
+      style={{ userSelect: 'none' }}
+    >
       <ReactFlow
         nodes={nodesWithDragTarget}
         edges={edges}
@@ -549,9 +947,11 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
         isValidConnection={isValidConnection}
         onDrop={readOnly ? undefined : onDrop}
         onDragOver={readOnly ? undefined : onDragOver}
+        onNodeDragStart={readOnly ? undefined : onNodeDragStart}
         onNodeDrag={readOnly ? undefined : onNodeDrag}
         onNodeDragStop={readOnly ? undefined : onNodeDragStop}
         onNodeContextMenu={readOnly ? undefined : onNodeContextMenu}
+        onPaneContextMenu={readOnly ? undefined : onPaneContextMenu}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         connectionMode={ConnectionMode.Loose}
@@ -563,9 +963,15 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
         deleteKeyCode={null}
         selectNodesOnDrag={false}
         nodeDragThreshold={1}
-        selectionKeyCode={null}
-        multiSelectionKeyCode={null}
+        selectionKeyCode="Shift"
+        multiSelectionKeyCode="Shift"
         zoomActivationKeyCode={null}
+        selectionOnDrag={true}
+        panOnScroll={false}
+        panOnDrag={true}
+        minZoom={0.1}
+        maxZoom={4}
+        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
       >
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
         <Controls />
@@ -587,6 +993,7 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
             </marker>
           </defs>
         </svg>
+        
         
         {/* Draggable Tools Panel - Only show if not read-only */}
         {!readOnly && (
@@ -648,14 +1055,18 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
       </ReactFlow>
       
       {/* Context Menu */}
-      {contextMenu.node && (
-        <NodeContextMenu
-          node={contextMenu.node}
-          position={contextMenu.position}
-          onClose={() => setContextMenu({ node: null, position: { x: 0, y: 0 } })}
-          onDuplicate={duplicateNode}
-          onDelete={handleDeleteNode}
-        />
+      {contextMenu.nodes.length > 0 && (
+        <>
+          {console.log('Rendering NodeContextMenu with', contextMenu.nodes.length, 'nodes at position', contextMenu.position)}
+          <NodeContextMenu
+            nodes={contextMenu.nodes}
+            position={contextMenu.position}
+            onClose={() => setContextMenu({ nodes: [], position: { x: 0, y: 0 } })}
+            onCopy={handleCopyNodes}
+            onDuplicate={duplicateNodes}
+            onDelete={handleDeleteNodes}
+          />
+        </>
       )}
       
       {/* Synapse Context Menu */}
@@ -666,6 +1077,17 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
           onClose={() => setSynapseContextMenu({ node: null, position: { x: 0, y: 0 } })}
           onRename={handleSynapseRename}
           onDelete={handleSynapseDelete}
+        />
+      )}
+      
+      {/* Canvas Context Menu */}
+      {canvasContextMenu.show && (
+        <CanvasContextMenu
+          position={canvasContextMenu.position}
+          onClose={() => setCanvasContextMenu({ show: false, position: { x: 0, y: 0 } })}
+          onPaste={handlePasteAtPosition}
+          hasCopiedNodes={copiedNodes.length > 0}
+          copiedNodesCount={copiedNodes.length}
         />
       )}
     </div>

@@ -2,6 +2,7 @@ import { memo, useState, useRef, useEffect, useCallback } from 'react'
 import { NodeProps, useReactFlow, NodeResizer } from 'reactflow'
 import { NodeHandles } from './NodeHandles'
 import { DragHandle } from './DragHandle'
+import { GroupedNodeWrapper } from './GroupedNodeWrapper'
 
 interface TextNodeData {
   text?: string
@@ -27,6 +28,10 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
   const [error, setError] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const reactFlow = useReactFlow()
+  
+  // Check if multiple nodes are selected
+  const selectedNodesCount = reactFlow.getNodes().filter(n => n.selected).length
+  const showToolbars = selected && selectedNodesCount === 1
 
   const updateNodeData = useCallback((updates: Partial<TextNodeData>) => {
     reactFlow.setNodes((nodes) =>
@@ -455,7 +460,7 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
   }
 
   return (
-    <>
+    <GroupedNodeWrapper nodeId={id}>
       <NodeResizer 
         isVisible={selected}
         minWidth={300}
@@ -465,8 +470,11 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
       />
       <NodeHandles />
       <div className={`relative bg-white rounded-lg shadow-md border-2 ${selected ? 'border-blue-500' : 'border-gray-200'} w-full h-full flex flex-col overflow-hidden`}>
-        {/* Drag handle at the top */}
+        {/* Drag handles on all sides for easier grabbing */}
         <DragHandle position="top" />
+        <DragHandle position="left" showIcon={false} />
+        <DragHandle position="right" showIcon={false} />
+        <DragHandle position="bottom" showIcon={false} />
         
         {/* Main text area */}
         <div className="flex-1 relative overflow-hidden pt-6">
@@ -474,6 +482,7 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
             <textarea
               ref={textareaRef}
               value={formatText(text)}
+              onMouseDown={(e) => e.stopPropagation()}
               onChange={(e) => {
                 // Remove formatting markers when saving but preserve indentation
                 const lines = e.target.value.split('\n')
@@ -498,7 +507,7 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
               }}
               onKeyDown={handleKeyDown}
               onBlur={() => setIsEditing(false)}
-              className="absolute inset-0 resize-none outline-none text-gray-800 whitespace-pre-wrap p-4"
+              className="nodrag absolute inset-0 resize-none outline-none text-gray-800 whitespace-pre-wrap p-4"
               placeholder={
                 format === 'bullet' ? '• Enter bullet points...' :
                 format === 'numbered' ? '1. Enter numbered items...' :
@@ -511,7 +520,7 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
           ) : (
             <div 
               onClick={() => setIsEditing(true)} 
-              className="absolute inset-0 cursor-text text-gray-800 whitespace-pre-wrap p-4 overflow-auto"
+              className="nodrag absolute inset-0 cursor-text text-gray-800 whitespace-pre-wrap p-4 overflow-auto"
               onMouseDown={(e) => e.stopPropagation()}
               style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
             >
@@ -533,7 +542,7 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
                     return (
                       <div
                         key={index}
-                        className="absolute h-6 w-6 cursor-pointer pointer-events-auto"
+                        className="nodrag absolute h-6 w-6 cursor-pointer pointer-events-auto"
                         style={{ 
                           top: `${16 + index * 24}px`,
                           left: '16px',
@@ -576,7 +585,7 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
                       clickAreas.push(
                         <div
                           key={`toggle-${rawIndex}`}
-                          className="absolute w-8 h-6 cursor-pointer hover:bg-blue-100 rounded-sm flex items-center justify-center pointer-events-auto transition-all duration-200 border border-transparent hover:border-blue-200"
+                          className="nodrag absolute w-8 h-6 cursor-pointer hover:bg-blue-100 rounded-sm flex items-center justify-center pointer-events-auto transition-all duration-200 border border-transparent hover:border-blue-200"
                           style={{ 
                             top: `${16 + formattedIndex * 24}px`,
                             left: `${12 + indent * 8}px`,
@@ -608,8 +617,8 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
         </div>
       </div>
 
-      {/* Format Toolbar - Show above node when selected */}
-      {selected && (
+      {/* Format Toolbar - Show above node when selected and only one node selected */}
+      {showToolbars && (
         <div 
           className="absolute bg-white rounded-lg shadow-xl border border-gray-200 p-2 transition-opacity duration-150"
           style={{
@@ -721,8 +730,8 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
         </div>
       )}
 
-      {/* AI Analysis Panel - Only show when selected and has text */}
-      {selected && text.trim() && (
+      {/* AI Analysis Panel - Only show when selected (single node) and has text */}
+      {showToolbars && text.trim() && (
         <div 
           className="absolute w-80 bg-white rounded-lg shadow-2xl border border-gray-200"
           style={{
@@ -796,7 +805,7 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
           </div>
         </div>
       )}
-    </>
+    </GroupedNodeWrapper>
   )
 })
 

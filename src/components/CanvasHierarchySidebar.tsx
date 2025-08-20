@@ -39,6 +39,8 @@ export function CanvasHierarchySidebar() {
   const [editingCanvasId, setEditingCanvasId] = useState<string | null>(null)
   const [editingCanvasName, setEditingCanvasName] = useState('')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; canvasId: string } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [nestedCanvasCount, setNestedCanvasCount] = useState<Record<string, number>>({})
   const router = useRouter()
   const params = useParams()
   const currentCanvasId = params.id as string
@@ -124,11 +126,28 @@ export function CanvasHierarchySidebar() {
     loadHierarchy()
   }, [loadHierarchy])
 
+  // Debug deleteConfirm state changes
+  useEffect(() => {
+    console.log('deleteConfirm state changed to:', deleteConfirm)
+  }, [deleteConfirm])
+
   // Close context menu when clicking outside
   useEffect(() => {
-    const handleClick = () => setContextMenu(null)
-    document.addEventListener('click', handleClick)
-    return () => document.removeEventListener('click', handleClick)
+    const handleClick = (e: MouseEvent) => {
+      // Check if the click is inside the context menu
+      const contextMenuElement = document.querySelector('.context-menu-container')
+      if (contextMenuElement && contextMenuElement.contains(e.target as Node)) {
+        // Click is inside context menu, don't close it
+        return
+      }
+      
+      setContextMenu(null)
+      setDeleteConfirm(null)
+    }
+    
+    // Use mousedown instead of click to avoid conflicts with button onClick
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
   const renameCanvas = async (canvasId: string) => {
@@ -177,6 +196,97 @@ export function CanvasHierarchySidebar() {
 
       setEditingCanvasId(null)
       loadHierarchy() // Reload to show updated name
+    }
+  }
+
+  const deleteCanvas = async (canvasId: string) => {
+    if (canvasId === currentCanvasId) {
+      alert("Cannot delete the canvas you're currently viewing")
+      return
+    }
+
+    try {
+      console.log('Attempting to delete canvas:', canvasId)
+      
+      // First, check if the canvas exists and get its details
+      const { data: canvasData, error: fetchError } = await supabase
+        .from('canvases')
+        .select('*')
+        .eq('id', canvasId)
+        .single()
+      
+      if (fetchError) {
+        console.error('Error fetching canvas:', fetchError)
+        alert(`Failed to fetch canvas: ${fetchError.message}`)
+        return
+      }
+      
+      if (!canvasData) {
+        console.error('Canvas not found:', canvasId)
+        alert('Canvas not found')
+        return
+      }
+      
+      console.log('Canvas to delete:', canvasData)
+      
+      // Count nested canvases that will be deleted
+      const { count: nestedCount, error: countError } = await supabase
+        .from('canvases')
+        .select('*', { count: 'exact', head: true })
+        .eq('parent_canvas_id', canvasId)
+      
+      if (!countError && nestedCount && nestedCount > 0) {
+        console.log(`This canvas has ${nestedCount} nested sub-canvas(es) that will also be deleted`)
+      }
+      
+      // First, clear any synapse nodes that reference this canvas
+      const { data: synapseNodes, error: synapseError } = await supabase
+        .from('nodes')
+        .select('*')
+        .eq('type', 'synapse')
+      
+      if (!synapseError && synapseNodes) {
+        for (const node of synapseNodes) {
+          if (node.data?.subCanvasId === canvasId) {
+            console.log('Clearing synapse node reference:', node.id)
+            await supabase
+              .from('nodes')
+              .update({
+                data: {
+                  ...node.data,
+                  subCanvasId: null,
+                  actualSubCanvasId: null
+                }
+              })
+              .eq('id', node.id)
+          }
+        }
+      }
+      
+      // Try to delete the canvas
+      const { data: deleteData, error: deleteError } = await supabase
+        .from('canvases')
+        .delete()
+        .eq('id', canvasId)
+        .select() // Add select to see what was deleted
+      
+      if (deleteError) {
+        console.error('Delete error:', deleteError)
+        // Check if it's an RLS policy error
+        if (deleteError.message?.includes('policy')) {
+          alert('You do not have permission to delete this canvas. You can only delete canvases you created.')
+        } else {
+          alert(`Failed to delete canvas: ${deleteError.message}`)
+        }
+      } else {
+        console.log('Successfully deleted canvas:', deleteData)
+        setDeleteConfirm(null)
+        setContextMenu(null)
+        loadHierarchy()
+      }
+    } catch (err) {
+      console.error('Unexpected delete error:', err)
+      alert('Failed to delete canvas')
     }
   }
 
@@ -337,11 +447,12 @@ export function CanvasHierarchySidebar() {
       {/* Context Menu */}
       {contextMenu && (
         <div
-          className="fixed bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50"
+          className="context-menu-container fixed bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 min-w-[180px]"
           style={{
             left: contextMenu.x,
             top: contextMenu.y,
           }}
+          onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -360,6 +471,65 @@ export function CanvasHierarchySidebar() {
             </svg>
             Rename Canvas
           </button>
+          
+          {contextMenu.canvasId !== currentCanvasId && (
+            <>
+              <div className="border-t border-gray-200 my-1" />
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }}
+                onClick={async (e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  console.log('Delete button clicked. Canvas ID:', contextMenu.canvasId)
+                  console.log('Current delete confirm state:', deleteConfirm)
+                  
+                  if (deleteConfirm === contextMenu.canvasId) {
+                    console.log('Confirming delete for canvas:', contextMenu.canvasId)
+                    deleteCanvas(contextMenu.canvasId)
+                    setContextMenu(null)
+                  } else {
+                    console.log('First click - checking for nested canvases:', contextMenu.canvasId)
+                    
+                    // Check for nested canvases
+                    const { count, error } = await supabase
+                      .from('canvases')
+                      .select('*', { count: 'exact', head: true })
+                      .eq('parent_canvas_id', contextMenu.canvasId)
+                    
+                    if (!error && count) {
+                      setNestedCanvasCount(prev => ({ ...prev, [contextMenu.canvasId]: count }))
+                    }
+                    
+                    setDeleteConfirm(contextMenu.canvasId)
+                  }
+                }}
+                className={`w-full px-4 py-2 text-left text-sm flex items-center ${
+                  deleteConfirm === contextMenu.canvasId 
+                    ? 'bg-red-100 text-red-700 font-medium hover:bg-red-200' 
+                    : 'text-red-600 hover:bg-red-50'
+                }`}
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>
+                  {deleteConfirm === contextMenu.canvasId ? (
+                    <>
+                      Click again to confirm
+                      {nestedCanvasCount[contextMenu.canvasId] > 0 && (
+                        <span className="block text-xs mt-1">
+                          ⚠️ This will also delete {nestedCanvasCount[contextMenu.canvasId]} nested canvas{nestedCanvasCount[contextMenu.canvasId] > 1 ? 'es' : ''}
+                        </span>
+                      )}
+                    </>
+                  ) : 'Delete Canvas'}
+                </span>
+              </button>
+            </>
+          )}
         </div>
       )}
     </>

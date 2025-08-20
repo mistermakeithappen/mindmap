@@ -20,6 +20,7 @@
     "@tiptap/starter-kit": "^3.0.9",
     "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.21",
+    "d3-ease": "^3.0.1",
     "dotenv": "^17.2.1",
     "next": "15.4.5",
     "openai": "^5.11.0",
@@ -28,6 +29,7 @@
     "react-markdown": "^10.1.0",
     "react-player": "^3.3.1",
     "reactflow": "^11.11.4",
+    "styled-jsx": "^5.1.6",
     "uuid": "^11.1.0",
     "zustand": "^5.0.7"
   },
@@ -38,7 +40,7 @@
     "eslint": "^8",
     "eslint-config-next": "15.4.5",
     "postcss": "^8",
-    "tailwindcss": "^3.4.0",
+    "tailwindcss": "^3.4.17",
     "typescript": "^5"
   }
 }

@@ -101,7 +101,7 @@ export const StickyNode = memo(({ id, data, selected, dragging }: NodeProps<Stic
       >
         {/* Drag handle - top bar for repositioning */}
         <div 
-          className="absolute top-0 left-0 right-0 h-8 cursor-move z-10 bg-black bg-opacity-0 hover:bg-opacity-5 transition-colors"
+          className="drag-handle absolute top-0 left-0 right-0 h-8 cursor-move z-10 bg-black bg-opacity-0 hover:bg-opacity-5 transition-colors"
           onMouseEnter={() => setShowControls(true)}
           onMouseLeave={() => setShowControls(false)}
         >
@@ -124,7 +124,7 @@ export const StickyNode = memo(({ id, data, selected, dragging }: NodeProps<Stic
               <button
                 key={c.value}
                 onClick={() => handleColorChange(c.value)}
-                className={`w-5 h-5 rounded-full ${c.value} ${c.border} border-2 ${
+                className={`nodrag w-5 h-5 rounded-full ${c.value} ${c.border} border-2 ${
                   color === c.value ? 'ring-2 ring-gray-600 ring-offset-1' : ''
                 } hover:scale-110 transition-transform`}
                 title={c.name}
@@ -138,7 +138,7 @@ export const StickyNode = memo(({ id, data, selected, dragging }: NodeProps<Stic
               <button
                 key={s.value}
                 onClick={() => handleShapeChange(s.value as StickyNodeData['shape'])}
-                className={`w-5 h-5 flex items-center justify-center text-xs rounded ${
+                className={`nodrag w-5 h-5 flex items-center justify-center text-xs rounded ${
                   shape === s.value 
                     ? 'bg-gray-700 text-white' 
                     : 'bg-white bg-opacity-70 text-gray-700 hover:bg-opacity-90'
@@ -158,7 +158,7 @@ export const StickyNode = memo(({ id, data, selected, dragging }: NodeProps<Stic
             value={text}
             onChange={handleTextChange}
             placeholder="Write a note..."
-            className={`w-full h-full bg-transparent outline-none resize-none ${
+            className={`nodrag w-full h-full bg-transparent outline-none resize-none ${
               shape === 'circle' ? 'text-center flex items-center justify-center' : ''
             }`}
             style={{ 

@@ -23,6 +23,10 @@ export const CanvasHeadlineNode = memo(({ id, data, selected, dragging }: NodePr
   const textRef = useRef<HTMLDivElement>(null)
   const measureRef = useRef<HTMLSpanElement>(null)
   const reactFlow = useReactFlow()
+  
+  // Check if multiple nodes are selected
+  const selectedNodesCount = reactFlow.getNodes().filter(n => n.selected).length
+  const showSettings = selected && selectedNodesCount === 1
 
   const updateNodeData = (updates: Partial<CanvasHeadlineNodeData>) => {
     reactFlow.setNodes((nodes) =>
@@ -91,7 +95,8 @@ export const CanvasHeadlineNode = memo(({ id, data, selected, dragging }: NodePr
         width: `${textWidth}px`,
         minHeight: '50px',
         padding: selected ? '8px' : '0px',
-        background: 'transparent'
+        background: 'transparent',
+        zIndex: 1000 // Higher z-index to appear above other nodes
       }}
     >
       {/* Drag handle at the top */}
@@ -99,8 +104,8 @@ export const CanvasHeadlineNode = memo(({ id, data, selected, dragging }: NodePr
       
       {/* Hidden span for measuring text */}
       <span ref={measureRef} style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'nowrap' }} />
-      {/* Handles - only visible when selected */}
-      {selected && (
+      {/* Handles - only visible when selected as single node */}
+      {showSettings && (
         <>
           <Handle
             type="target"
@@ -138,8 +143,11 @@ export const CanvasHeadlineNode = memo(({ id, data, selected, dragging }: NodePr
         onBlur={() => setIsEditing(false)}
         onInput={handleTextChange}
         onKeyDown={handleKeyDown}
-        onMouseDown={(e) => e.stopPropagation()}
-        className="outline-none cursor-text"
+        onMouseDown={(e) => {
+          // Always stop propagation to prevent node dragging
+          e.stopPropagation()
+        }}
+        className="nodrag outline-none cursor-text"
         style={{
           fontSize: `${fontSize}px`,
           fontWeight,
@@ -155,14 +163,17 @@ export const CanvasHeadlineNode = memo(({ id, data, selected, dragging }: NodePr
           padding: '4px',
           borderRadius: '4px',
           transition: 'background-color 0.2s',
-          backgroundColor: isEditing ? 'rgba(255, 255, 255, 0.05)' : 'transparent'
+          backgroundColor: isEditing ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
+          userSelect: 'text',
+          WebkitUserSelect: 'text',
+          MozUserSelect: 'text'
         }}
       >
         {!isEditing ? text : undefined}
       </div>
 
-      {/* Settings panel - only visible when selected */}
-      {selected && !isEditing && (
+      {/* Settings panel - only visible when selected and only one node selected */}
+      {showSettings && !isEditing && (
         <div 
           className="absolute top-full left-0 mt-2 p-3 bg-white rounded-lg shadow-lg border border-gray-200 z-50 transition-opacity duration-150"
           style={{ opacity: dragging ? 0.1 : 1, pointerEvents: dragging ? 'none' : 'auto' }}
@@ -233,7 +244,7 @@ export const CanvasHeadlineNode = memo(({ id, data, selected, dragging }: NodePr
                   setFontSize(size)
                   updateNodeData({ fontSize: size })
                 }}
-                className="w-16 px-1 py-0.5 border border-gray-300 rounded"
+                className="nodrag w-16 px-1 py-0.5 border border-gray-300 rounded"
                 min="12"
                 max="72"
               />
@@ -247,7 +258,7 @@ export const CanvasHeadlineNode = memo(({ id, data, selected, dragging }: NodePr
                   setFontWeight(e.target.value)
                   updateNodeData({ fontWeight: e.target.value })
                 }}
-                className="px-1 py-0.5 border border-gray-300 rounded text-xs"
+                className="nodrag px-1 py-0.5 border border-gray-300 rounded text-xs"
               >
                 <option value="400">Normal</option>
                 <option value="500">Medium</option>
@@ -267,7 +278,7 @@ export const CanvasHeadlineNode = memo(({ id, data, selected, dragging }: NodePr
                   setColor(e.target.value)
                   updateNodeData({ color: e.target.value })
                 }}
-                className="w-8 h-6 border border-gray-300 rounded cursor-pointer"
+                className="nodrag w-8 h-6 border border-gray-300 rounded cursor-pointer"
               />
             </label>
 
@@ -279,7 +290,7 @@ export const CanvasHeadlineNode = memo(({ id, data, selected, dragging }: NodePr
                   setFontFamily(e.target.value)
                   updateNodeData({ fontFamily: e.target.value })
                 }}
-                className="px-1 py-0.5 border border-gray-300 rounded text-xs"
+                className="nodrag px-1 py-0.5 border border-gray-300 rounded text-xs"
               >
                 <option value="system-ui">System</option>
                 <option value="serif">Serif</option>

@@ -1,6 +1,8 @@
 import { memo, useState } from 'react'
 import { NodeProps, useReactFlow } from 'reactflow'
 import { NodeHandles } from './NodeHandles'
+import { DragHandle } from './DragHandle'
+import { GroupedNodeWrapper } from './GroupedNodeWrapper'
 
 interface HeadlineNodeData {
   text?: string
@@ -47,6 +49,10 @@ export const HeadlineNode = memo(({ id, data, selected }: NodeProps<HeadlineNode
   const [align, setAlign] = useState(data.align || 'text-center')
   
   const reactFlow = useReactFlow()
+  
+  // Check if multiple nodes are selected
+  const selectedNodesCount = reactFlow.getNodes().filter(n => n.selected).length
+  const showToolbar = selected && selectedNodesCount === 1
 
   const updateNodeData = (updates: Partial<HeadlineNodeData>) => {
     reactFlow.setNodes((nodes) =>
@@ -82,9 +88,14 @@ export const HeadlineNode = memo(({ id, data, selected }: NodeProps<HeadlineNode
   }
 
   return (
-    <>
+    <GroupedNodeWrapper nodeId={id}>
       <div className={`relative bg-gradient-to-r ${gradient} rounded-lg shadow-md p-4 border-2 ${selected ? 'border-purple-700' : 'border-transparent'} min-w-[200px]`}>
         <NodeHandles />
+        {/* Drag handles on all sides for easier grabbing */}
+        <DragHandle position="top" />
+        <DragHandle position="left" showIcon={false} />
+        <DragHandle position="right" showIcon={false} />
+        <DragHandle position="bottom" showIcon={false} />
         
         {/* Text Content */}
         {isEditing ? (
@@ -92,23 +103,25 @@ export const HeadlineNode = memo(({ id, data, selected }: NodeProps<HeadlineNode
             type="text"
             value={text}
             onChange={handleTextChange}
+            onMouseDown={(e) => e.stopPropagation()}
             onBlur={() => setIsEditing(false)}
             onKeyDown={(e) => e.key === 'Enter' && setIsEditing(false)}
-            className={`w-full text-2xl font-bold text-white bg-transparent outline-none placeholder-white/70 ${font} ${shadow} ${align}`}
+            className={`nodrag w-full text-2xl font-bold text-white bg-transparent outline-none placeholder-white/70 ${font} ${shadow} ${align}`}
             autoFocus
           />
         ) : (
           <h2 
-            onClick={() => setIsEditing(true)} 
-            className={`text-2xl font-bold text-white cursor-text ${font} ${shadow} ${align}`}
+            onClick={() => setIsEditing(true)}
+            onMouseDown={(e) => e.stopPropagation()}
+            className={`nodrag text-2xl font-bold text-white cursor-text ${font} ${shadow} ${align}`}
           >
             {text}
           </h2>
         )}
       </div>
 
-      {/* Floating Settings Panel - Only show when selected */}
-      {selected && (
+      {/* Floating Settings Panel - Only show when selected and single node */}
+      {showToolbar && (
         <div 
           className="absolute w-72 bg-white rounded-lg shadow-2xl p-4 border border-gray-200"
           style={{
@@ -217,7 +230,7 @@ export const HeadlineNode = memo(({ id, data, selected }: NodeProps<HeadlineNode
 
         </div>
       )}
-    </>
+    </GroupedNodeWrapper>
   )
 })
 

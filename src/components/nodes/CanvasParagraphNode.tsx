@@ -23,6 +23,10 @@ export const CanvasParagraphNode = memo(({ id, data, selected, dragging }: NodeP
   const textRef = useRef<HTMLDivElement>(null)
   const measureRef = useRef<HTMLDivElement>(null)
   const reactFlow = useReactFlow()
+  
+  // Check if multiple nodes are selected
+  const selectedNodesCount = reactFlow.getNodes().filter(n => n.selected).length
+  const showSettings = selected && selectedNodesCount === 1
 
   const updateNodeData = (updates: Partial<CanvasParagraphNodeData>) => {
     reactFlow.setNodes((nodes) =>
@@ -112,7 +116,8 @@ export const CanvasParagraphNode = memo(({ id, data, selected, dragging }: NodeP
         width: `${textDimensions.width}px`,
         height: `${textDimensions.height}px`,
         padding: selected ? '8px' : '0px',
-        background: 'transparent'
+        background: 'transparent',
+        zIndex: 1000 // Higher z-index to appear above other nodes
       }}
     >
       {/* Drag handle at the top */}
@@ -120,8 +125,8 @@ export const CanvasParagraphNode = memo(({ id, data, selected, dragging }: NodeP
       
       {/* Hidden div for measuring text */}
       <div ref={measureRef} style={{ position: 'absolute', visibility: 'hidden' }} />
-      {/* Handles - only visible when selected */}
-      {selected && (
+      {/* Handles - only visible when selected as single node */}
+      {showSettings && (
         <>
           <Handle
             type="target"
@@ -159,8 +164,11 @@ export const CanvasParagraphNode = memo(({ id, data, selected, dragging }: NodeP
         onBlur={() => setIsEditing(false)}
         onInput={handleTextChange}
         onKeyDown={handleKeyDown}
-        onMouseDown={(e) => e.stopPropagation()}
-        className="outline-none cursor-text"
+        onMouseDown={(e) => {
+          // Always stop propagation to prevent node dragging
+          e.stopPropagation()
+        }}
+        className="nodrag outline-none cursor-text"
         style={{
           fontSize: `${fontSize}px`,
           lineHeight,
@@ -175,14 +183,17 @@ export const CanvasParagraphNode = memo(({ id, data, selected, dragging }: NodeP
           padding: '8px',
           borderRadius: '4px',
           transition: 'background-color 0.2s',
-          backgroundColor: isEditing ? 'rgba(255, 255, 255, 0.05)' : 'transparent'
+          backgroundColor: isEditing ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
+          userSelect: 'text',
+          WebkitUserSelect: 'text',
+          MozUserSelect: 'text'
         }}
       >
         {!isEditing ? text : undefined}
       </div>
 
-      {/* Settings panel - only visible when selected */}
-      {selected && !isEditing && (
+      {/* Settings panel - only visible when selected and only one node selected */}
+      {showSettings && !isEditing && (
         <div 
           className="absolute top-full left-0 mt-2 p-3 bg-white rounded-lg shadow-lg border border-gray-200 z-50 transition-opacity duration-150"
           style={{ opacity: dragging ? 0.1 : 1, pointerEvents: dragging ? 'none' : 'auto' }}
@@ -269,7 +280,7 @@ export const CanvasParagraphNode = memo(({ id, data, selected, dragging }: NodeP
                     setFontSize(size)
                     updateNodeData({ fontSize: size })
                   }}
-                  className="w-14 px-1 py-0.5 border border-gray-300 rounded"
+                  className="nodrag w-14 px-1 py-0.5 border border-gray-300 rounded"
                   min="10"
                   max="32"
                 />
@@ -285,7 +296,7 @@ export const CanvasParagraphNode = memo(({ id, data, selected, dragging }: NodeP
                     setLineHeight(height)
                     updateNodeData({ lineHeight: height })
                   }}
-                  className="w-14 px-1 py-0.5 border border-gray-300 rounded"
+                  className="nodrag w-14 px-1 py-0.5 border border-gray-300 rounded"
                   min="1"
                   max="3"
                   step="0.1"
@@ -301,7 +312,7 @@ export const CanvasParagraphNode = memo(({ id, data, selected, dragging }: NodeP
                     setColor(e.target.value)
                     updateNodeData({ color: e.target.value })
                   }}
-                  className="w-8 h-6 border border-gray-300 rounded cursor-pointer"
+                  className="nodrag w-8 h-6 border border-gray-300 rounded cursor-pointer"
                 />
               </label>
 
@@ -313,7 +324,7 @@ export const CanvasParagraphNode = memo(({ id, data, selected, dragging }: NodeP
                     setFontFamily(e.target.value)
                     updateNodeData({ fontFamily: e.target.value })
                   }}
-                  className="px-1 py-0.5 border border-gray-300 rounded text-xs"
+                  className="nodrag px-1 py-0.5 border border-gray-300 rounded text-xs"
                 >
                   <option value="system-ui">System</option>
                   <option value="serif">Serif</option>

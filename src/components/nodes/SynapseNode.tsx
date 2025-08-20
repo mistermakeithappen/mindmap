@@ -19,6 +19,7 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
   const [isHovering, setIsHovering] = useState(false)
   const [isDragTarget, setIsDragTarget] = useState(false)
   const [actualSubCanvasId, setActualSubCanvasId] = useState<string | null>(data.subCanvasId || null)
+  const [isCheckingCanvas, setIsCheckingCanvas] = useState(true) // Add loading state for canvas check
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const params = useParams()
@@ -50,10 +51,12 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
   // Check database for existing sub-canvas on mount
   useEffect(() => {
     const checkExistingSubCanvas = async () => {
+      setIsCheckingCanvas(true)
       try {
         // First check if we already have subCanvasId in data
         if (data.subCanvasId) {
           setActualSubCanvasId(data.subCanvasId)
+          setIsCheckingCanvas(false)
           return
         }
         
@@ -78,6 +81,8 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
         }
       } catch (error) {
         console.error('Error checking existing sub-canvas:', error)
+      } finally {
+        setIsCheckingCanvas(false)
       }
     }
     
@@ -136,6 +141,12 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
   }
 
   const handleClick = async () => {
+    // Prevent clicks while checking or creating
+    if (isCheckingCanvas || isCreating) {
+      console.log('Click ignored - still checking or creating')
+      return
+    }
+    
     console.log('Synapse clicked:', { id, actualSubCanvasId })
     
     if (!actualSubCanvasId) {
@@ -145,6 +156,7 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
         const { data: userData } = await supabase.auth.getUser()
         if (!userData.user) {
           console.error('User not authenticated')
+          setIsCreating(false)
           return
         }
 
@@ -167,24 +179,30 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
             .update({ 
               data: {
                 ...data,
-                subCanvasId: newCanvasId
+                subCanvasId: newCanvasId,
+                label: label
               }
             })
             .eq('id', id)
             .eq('canvas_id', currentCanvasId)
           
           if (!nodeError) {
-            // Update React Flow state
+            // Update React Flow state BEFORE navigation
             reactFlow.setNodes((nodes) =>
               nodes.map((node) =>
                 node.id === id 
-                  ? { ...node, data: { ...node.data, subCanvasId: newCanvasId } }
+                  ? { ...node, data: { ...node.data, subCanvasId: newCanvasId, label: label } }
                   : node
               )
             )
             setActualSubCanvasId(newCanvasId)
-            console.log('Navigating to new sub-canvas:', newCanvasId)
-            router.push(`/canvas/${newCanvasId}`)
+            console.log('Successfully linked sub-canvas:', newCanvasId)
+            
+            // Navigate after a small delay to ensure state is updated
+            setTimeout(() => {
+              console.log('Navigating to new sub-canvas:', newCanvasId)
+              router.push(`/canvas/${newCanvasId}`)
+            }, 100)
           } else {
             console.error('Error updating node with sub-canvas ID:', nodeError)
           }
@@ -313,7 +331,7 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
         )}
         
         {/* Click hint */}
-        {isHovering && (
+        {isHovering && !isCheckingCanvas && (
           <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
             {actualSubCanvasId ? 'Click to enter • Right-click for options' : 'Click to create sub-canvas • Right-click for options'}
           </div>
@@ -328,14 +346,16 @@ export const SynapseNode = memo(({ id, data = {}, selected }: NodeProps<SynapseN
       )}
       
       {/* Loading overlay */}
-      {isCreating && (
+      {(isCreating || isCheckingCanvas) && (
         <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
-          <div className="text-white text-sm">Creating...</div>
+          <div className="text-white text-sm">
+            {isCheckingCanvas ? 'Loading...' : 'Creating...'}
+          </div>
         </div>
       )}
       
-      {/* Click handler for navigation - only active when not editing */}
-      {!isEditing && (
+      {/* Click handler for navigation - only active when not editing, checking, or creating */}
+      {!isEditing && !isCheckingCanvas && !isCreating && (
         <div 
           className="absolute inset-0 rounded-full cursor-pointer z-20"
           onClick={(e) => {

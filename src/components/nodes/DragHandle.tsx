@@ -14,15 +14,15 @@ export const DragHandle = memo(({
   const getPositionClasses = () => {
     switch (position) {
       case 'top':
-        return 'top-0 left-0 right-0 h-6 cursor-move'
+        return 'top-0 left-0 right-0 h-10 cursor-move'
       case 'bottom':
-        return 'bottom-0 left-0 right-0 h-6 cursor-move'
+        return 'bottom-0 left-0 right-0 h-10 cursor-move'
       case 'left':
-        return 'left-0 top-0 bottom-0 w-6 cursor-move'
+        return 'left-0 top-0 bottom-0 w-10 cursor-move'
       case 'right':
-        return 'right-0 top-0 bottom-0 w-6 cursor-move'
+        return 'right-0 top-0 bottom-0 w-10 cursor-move'
       default:
-        return 'top-0 left-0 right-0 h-6 cursor-move'
+        return 'top-0 left-0 right-0 h-10 cursor-move'
     }
   }
 
