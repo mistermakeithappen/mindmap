@@ -730,16 +730,18 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
         </div>
       )}
 
-      {/* AI Analysis Panel - Only show when selected (single node) and has text */}
+      {/* Ask AI Panel - Only show when selected (single node) and has text */}
       {showToolbars && text.trim() && (
         <div 
-          className="absolute w-80 bg-white rounded-lg shadow-2xl border border-gray-200"
+          className="absolute bg-white rounded-lg shadow-2xl border border-gray-200"
           style={{
+            width: aiOptions.length > 0 ? '800px' : '320px',
             top: 'calc(100% + 20px)',
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 9999,
             pointerEvents: 'auto',
+            transition: 'width 0.3s ease-in-out',
           }}
         >
           {/* Arrow pointing to node */}
@@ -754,7 +756,7 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
           
           <div className="p-4 space-y-3">
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-              <span>✨</span> AI Analysis
+              <span>✨</span> Ask AI
             </h3>
             
             <div>
@@ -783,24 +785,33 @@ export const TextNode = memo(({ id, data, selected, dragging }: NodeProps<TextNo
               <div className="text-xs text-red-600">{error}</div>
             )}
 
-            {/* AI Options */}
+            {/* AI Options - with its own scroll container */}
             {aiOptions.length > 0 && (
-              <div className="space-y-2 mt-4 max-h-64 overflow-y-auto">
+              <>
                 <h4 className="text-sm font-medium text-gray-700">AI Suggestions:</h4>
-                {aiOptions.map((option, index) => (
-                  <div key={index} className="bg-gray-50 rounded-md border border-gray-200 p-3">
-                    <h5 className="font-medium text-sm text-gray-800 mb-1">{option.title}</h5>
-                    <p className="text-xs text-gray-600 mb-2">{option.reasoning}</p>
-                    <div className="text-sm text-gray-700 mb-2 line-clamp-3">{option.content}</div>
-                    <button
-                      onClick={() => applyOption(option)}
-                      className="text-xs px-2 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors"
-                    >
-                      Apply This Option
-                    </button>
-                  </div>
-                ))}
-              </div>
+                <div 
+                  className="border border-gray-200 rounded-md p-2"
+                  style={{
+                    maxHeight: aiOptions.length > 2 ? '900px' : '700px',
+                    overflowY: 'auto',
+                    overflowX: 'hidden'
+                  }}
+                >
+                  {aiOptions.map((option, index) => (
+                    <div key={index} className="bg-gray-50 rounded-md p-3 mb-2 last:mb-0">
+                      <h5 className="font-medium text-sm text-gray-800 mb-1">{option.title}</h5>
+                      <p className="text-xs text-gray-600 mb-2">{option.reasoning}</p>
+                      <div className="text-sm text-gray-700 mb-2 line-clamp-3">{option.content}</div>
+                      <button
+                        onClick={() => applyOption(option)}
+                        className="text-xs px-2 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors"
+                      >
+                        Apply This Option
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </div>

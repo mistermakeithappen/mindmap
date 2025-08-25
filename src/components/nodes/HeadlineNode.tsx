@@ -91,11 +91,12 @@ export const HeadlineNode = memo(({ id, data, selected }: NodeProps<HeadlineNode
     <GroupedNodeWrapper nodeId={id}>
       <div className={`relative bg-gradient-to-r ${gradient} rounded-lg shadow-md p-4 border-2 ${selected ? 'border-purple-700' : 'border-transparent'} min-w-[200px]`}>
         <NodeHandles />
-        {/* Drag handles on all sides for easier grabbing */}
-        <DragHandle position="top" />
-        <DragHandle position="left" showIcon={false} />
-        <DragHandle position="right" showIcon={false} />
-        <DragHandle position="bottom" showIcon={false} />
+        {/* Small drag handle only at the top center */}
+        <div className="drag-handle absolute -top-2 left-1/2 transform -translate-x-1/2 w-12 h-6 cursor-move z-10 bg-gray-700 bg-opacity-20 rounded hover:bg-opacity-40 transition-colors flex items-center justify-center">
+          <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5v14" />
+          </svg>
+        </div>
         
         {/* Text Content */}
         {isEditing ? (

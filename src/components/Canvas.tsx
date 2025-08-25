@@ -572,6 +572,16 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
     setMousePosition({ x: event.clientX, y: event.clientY })
   }, [readOnly, getNodes])
 
+  // Handle clicking on blank canvas space to close context menus
+  const onPaneClick = useCallback((event: React.MouseEvent) => {
+    console.log('=== onPaneClick triggered - closing context menus ===')
+    
+    // Close all context menus
+    setContextMenu({ nodes: [], position: { x: 0, y: 0 } })
+    setSynapseContextMenu({ node: null, position: { x: 0, y: 0 } })
+    setCanvasContextMenu({ show: false, position: { x: 0, y: 0 } })
+  }, [])
+
   // Copy nodes function
   const handleCopyNodes = useCallback((nodesToCopy: Node[]) => {
     setCopiedNodes(nodesToCopy)
@@ -952,6 +962,7 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
         onNodeDragStop={readOnly ? undefined : onNodeDragStop}
         onNodeContextMenu={readOnly ? undefined : onNodeContextMenu}
         onPaneContextMenu={readOnly ? undefined : onPaneContextMenu}
+        onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         connectionMode={ConnectionMode.Loose}
@@ -1025,7 +1036,7 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
                   <DraggableNode type="synapse" label="Synapse" icon="🌀" />
                   <DraggableNode type="video" label="Video" icon="🎬" />
                   <DraggableNode type="file" label="File" icon="📎" />
-                  <DraggableNode type="group" label="Group" icon="📁" />
+                  {/* <DraggableNode type="group" label="Group" icon="📁" /> */}
                 </div>
               </div>
               
