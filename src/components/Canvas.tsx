@@ -795,8 +795,8 @@ function CanvasInner({ canvasId, readOnly = false }: CanvasProps) {
       // Check if we're in the canvas and not in an input field
       if (!reactFlowWrapper.current?.contains(document.activeElement)) return
       
-      // Context menu for selected nodes (M key for menu, or Shift + Right Arrow)
-      if (e.key === 'm' || e.key === 'M' || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'ArrowRight')) {
+      // Context menu for selected nodes (ContextMenu key or Shift + Right Arrow)
+      if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'ArrowRight')) {
         e.preventDefault()
         const selectedNodes = nodes.filter(node => node.selected) // Include all selected nodes, even synapses
         console.log('=== Keyboard shortcut for context menu ===')
